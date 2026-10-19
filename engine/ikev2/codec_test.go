@@ -3,7 +3,7 @@ package ikev2
 import (
 	"bytes"
 	"encoding/hex"
-	vc "github.com/iniwex5/vowifi-go/engine/crypto"
+	vc "github.com/pexcn/vowifi-go/engine/crypto"
 	"strings"
 	"testing"
 )

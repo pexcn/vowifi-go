@@ -13,8 +13,8 @@ import (
 	"encoding/asn1"
 	"errors"
 	"fmt"
-	vc "github.com/iniwex5/vowifi-go/engine/crypto"
-	"github.com/iniwex5/vowifi-go/engine/ikev2"
+	vc "github.com/pexcn/vowifi-go/engine/crypto"
+	"github.com/pexcn/vowifi-go/engine/ikev2"
 	"math/big"
 )
 

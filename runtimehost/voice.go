@@ -6,9 +6,9 @@ import (
 	"net"
 	"net/netip"
 
-	"github.com/iniwex5/vowifi-go/internal/ims"
-	"github.com/iniwex5/vowifi-go/internal/netstack"
-	"github.com/iniwex5/vowifi-go/runtimehost/voicehost"
+	"github.com/pexcn/vowifi-go/internal/ims"
+	"github.com/pexcn/vowifi-go/internal/netstack"
+	"github.com/pexcn/vowifi-go/runtimehost/voicehost"
 )
 
 type ownedVoice struct {

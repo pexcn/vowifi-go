@@ -6,7 +6,7 @@ import (
 	"strings"
 	"testing"
 
-	"github.com/iniwex5/vowifi-go/engine/sim"
+	"github.com/pexcn/vowifi-go/engine/sim"
 )
 
 func TestDigestRFC2617Vector(t *testing.T) {

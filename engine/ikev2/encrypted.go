@@ -4,7 +4,7 @@ import (
 	"crypto/rand"
 	"encoding/binary"
 	"errors"
-	vc "github.com/iniwex5/vowifi-go/engine/crypto"
+	vc "github.com/pexcn/vowifi-go/engine/crypto"
 	"io"
 )
 

@@ -6,7 +6,7 @@ import (
 	"fmt"
 	"strings"
 
-	"github.com/iniwex5/vowifi-go/internal/ims"
+	"github.com/pexcn/vowifi-go/internal/ims"
 )
 
 // Preserve identity across initial, authenticated and refreshed REGISTERs.

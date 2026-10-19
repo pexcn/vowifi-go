@@ -13,7 +13,7 @@ import (
 	"strconv"
 	"strings"
 
-	"github.com/iniwex5/vowifi-go/engine/sim"
+	"github.com/pexcn/vowifi-go/engine/sim"
 )
 
 type challenge struct{ Realm, Nonce, Algorithm, QOP, Opaque string }

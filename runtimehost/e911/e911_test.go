@@ -13,9 +13,9 @@ import (
 	"testing"
 	"time"
 
-	"github.com/iniwex5/vowifi-go/engine/eap"
-	"github.com/iniwex5/vowifi-go/engine/sim"
-	"github.com/iniwex5/vowifi-go/runtimehost/carrier"
+	"github.com/pexcn/vowifi-go/engine/eap"
+	"github.com/pexcn/vowifi-go/engine/sim"
+	"github.com/pexcn/vowifi-go/runtimehost/carrier"
 )
 
 type httpFunc func(*HTTPRequest) (*HTTPResponse, error)

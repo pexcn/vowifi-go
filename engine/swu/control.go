@@ -4,8 +4,8 @@ import (
 	"context"
 	"encoding/binary"
 	"errors"
-	"github.com/iniwex5/vowifi-go/engine/ikev2"
-	"github.com/iniwex5/vowifi-go/engine/ipsec"
+	"github.com/pexcn/vowifi-go/engine/ikev2"
+	"github.com/pexcn/vowifi-go/engine/ipsec"
 	"net/netip"
 	"time"
 )

@@ -1,0 +1,9 @@
+This repository contains the independent vowifi-go implementation extracted from
+pexcn/vohive, branch rea, commit bd4fddb66b9ea55af0cbc94f815b3353e1a9f721.
+Source: https://github.com/pexcn/vohive/tree/bd4fddb66b9ea55af0cbc94f815b3353e1a9f721/vowifi-go
+
+It is a replacement implementation, not the recovered source of the original
+closed-source github.com/iniwex5/vowifi-go module. The source repository license
+is retained in LICENSE. Existing provenance notices remain with their files;
+see runtimehost/carrier/presets/PROVENANCE.md and docs/reverse-engineering/README.md.
+Third-party dependencies retain their respective licenses.

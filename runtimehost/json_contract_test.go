@@ -4,8 +4,8 @@ import (
 	"encoding/json"
 	"testing"
 
-	"github.com/iniwex5/vowifi-go/internal/ims"
-	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
+	"github.com/pexcn/vowifi-go/internal/ims"
+	"github.com/pexcn/vowifi-go/runtimehost/messaging"
 )
 
 func TestUSSDJSONPreservesFrontendMenuContract(t *testing.T) {

@@ -184,11 +184,11 @@ curl -fL --output work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 \
 printf '%s  %s\n' \
   2b080980c72fede3dbad1c9f8830bb51d0bc368b4acb576c4f2d27f9182eb59f \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 | sha256sum -c -
-python3 vowifi-go/docs/reverse-engineering/scripts/recover_artifact.py \
+python3 docs/reverse-engineering/scripts/recover_artifact.py \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 work/vowifi-analysis/recovered
-go run vowifi-go/docs/reverse-engineering/scripts/functions.go \
+go run docs/reverse-engineering/scripts/functions.go \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 > work/vowifi-analysis/functions.jsonl
-python3 vowifi-go/docs/reverse-engineering/scripts/seeds.py \
+python3 docs/reverse-engineering/scripts/seeds.py \
   work/vowifi-analysis/functions.jsonl work/vowifi-analysis/rea-seeds.tsv
 objdump -d --start-address=0xfd45c0 --stop-address=0xfd4780 \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64
@@ -203,7 +203,7 @@ objdump -d --start-address=0xfd45c0 --stop-address=0xfd4780 \
 export REA_GHIDRA_SEED_FILE="$PWD/work/vowifi-analysis/rea-seeds.tsv"
 export REA_GHIDRA_STARTUP_TIMEOUT_MS=600000
 export REA_GHIDRA_DISABLED_ANALYZERS='Decompiler Parameter ID,Decompiler Switch Analysis,Stack,Function ID,Reference,Data Reference'
-python3 vowifi-go/docs/reverse-engineering/scripts/rea_capture.py \
+python3 docs/reverse-engineering/scripts/rea_capture.py \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 work/vowifi-analysis/rea-attempt-new \
   --procedure 0xfd45c0 --procedure 0x10014e0
 ```

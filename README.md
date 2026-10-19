@@ -1,6 +1,8 @@
 # vowifi-go 独立实现
 
-这是 VoHive 闭源 `github.com/iniwex5/vowifi-go` 依赖的本地替代实现，模块路径保持兼容，通过宿主 `go.mod` 的 `replace` 接入。它不是恢复的原始源码，也尚未证明与原版完整等价。
+这是 VoHive 闭源 `github.com/iniwex5/vowifi-go` 依赖的独立替代实现，从 `pexcn/vohive` 的 `rea` 分支提取，并保留模块相关提交历史。它不是恢复的原始源码，也尚未证明与原版完整等价。
+
+本仓库提供 Go 库，入口为 `runtimehost`；SIM/APDU 和 modem 由宿主通过接口注入，不依赖 VoHive 源码或 Web 前端。
 
 [二进制分析、附件修正和可复现证据](docs/reverse-engineering/README.md)固定于用户指定的 Linux amd64 release。下载的原版二进制没有被执行；真实 SIM、运营商网络、短信、USSD 和电话都未用于本次验证。
 
@@ -33,24 +35,33 @@ CP 接收端按 RFC 7296 忽略保留字段，并在完整标准 TLV 解析失�
 
 SIM/APDU 与 modem 仍由 VoHive 宿主拥有。SWu 的 EAP-AKA 与 IMS 的 AKA Digest 是独立认证过程；严格 ISIM 选择会透传到宿主 provider，失败不会降级为 USIM。停止本模块不会关闭共享 modem。
 
-## 构建和验证
-
-使用 `go.mod` 固定的 Go 版本。单独模块测试不会自动被宿主的 `go test ./...` 包含：
+## 作为 Go 模块使用
 
 ```bash
-cd vowifi-go
-go test -race ./...
+go get github.com/pexcn/vowifi-go@v0.1.0
 ```
 
-协议集成测试会绑定本地 loopback UDP/TCP 端口，并使用可控的 AKA/SIP/IKE peer；沙箱需要允许本地 socket。没有测试会联系运营商或使用真实 SIM。
+宿主使用 `github.com/pexcn/vowifi-go/runtimehost` 等包。迁移原版兼容路径时，需要同步更新 Go import 和 `go.mod`；不应在同一进程同时引入两个路径下的模块。
 
-从宿主根目录构建，先按宿主开发流程准备 `internal/web/dist`：
+## 使用和验证
+
+使用 `go.mod` 固定的 Go 版本，在本仓库根目录操作：
 
 ```bash
-CGO_ENABLED=0 go test ./internal/vowifihost ./internal/sim ./internal/device ./internal/e911 ./internal/api
-CGO_ENABLED=0 go build -trimpath -buildvcs=false -tags 'with_utls nomsgpack' ./cmd/vohive
+go test ./...
+go vet ./...
 ```
 
-CI 分开运行模块竞态测试、宿主集成测试和构建。Docker 在 `go mod download` 前复制本地模块，构建不再尝试下载闭源 vowifi-go。
+协议集成测试会绑定本地 loopback UDP/TCP 端口，并使用可控的 AKA/SIP/IKE peer；运行环境需要允许本地 socket。没有测试会联系运营商或使用真实 SIM。CI 独立检查本模块。
 
-本轮具体检查结果和环境限制记录在 [验证记录](VALIDATION.md)。
+宿主通过 `runtimehost` 提供的请求、SIM provider、存储和观察者接口接入。VoHive 的设备管理、Web/API 和 modem 后端留在宿主仓库，部署时仍由 VoHive 提供完整应用。
+
+开发时可在 VoHive 根目录使用本地替换：
+
+```bash
+go mod edit -replace=github.com/pexcn/vowifi-go=../vowifi-go
+```
+
+此命令假定两个仓库位于同级目录；发布接入应固定新仓库的 tag 或提交版本。
+
+拆分前的检查结果和环境限制保留在 [历史验证记录](VALIDATION.md)。本仓库保留来源仓库的 [许可证](LICENSE)，提取来源见 [NOTICE](NOTICE)。
