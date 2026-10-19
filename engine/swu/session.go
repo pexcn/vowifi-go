@@ -98,6 +98,7 @@ type Session struct {
 	childMu               sync.RWMutex
 	retiredChildren       map[uint32]retiredChild
 	childCreated          time.Time
+	childDHGroup          uint16
 	childReset            chan struct{}
 	authDeadline          time.Time
 	ikeStateMu            sync.RWMutex

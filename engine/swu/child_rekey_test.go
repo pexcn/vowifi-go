@@ -276,8 +276,12 @@ func TestPeerChildRekeyRolesReplayAndOldDelete(t *testing.T) {
 			}
 			sendTunnelPacket(t, p, toClient)
 			receiveTunnelPacket(t, s)
+			activePeerSPI := peerSPI
+			if pfs {
+				activePeerSPI = completeInheritedPFSRekey(t, p, s)
+			}
 			// Deleting the active SA still ends this session.
-			sendRekeyRequest(t, p, 3, ikev2.Informational, []ikev2.Payload{childDelete(peerSPI)})
+			sendRekeyRequest(t, p, 3, ikev2.Informational, []ikev2.Payload{childDelete(activePeerSPI)})
 			readRekeyControl(t, p)
 			select {
 			case <-s.Done():
@@ -452,4 +456,57 @@ func TestChildRekeyTimerAndKeepaliveContinue(t *testing.T) {
 	if !errors.Is(s.Err(), ErrRekeyRequired) {
 		t.Fatal(s.Err())
 	}
+}
+
+func completeInheritedPFSRekey(t *testing.T, p *mockPeer, s *Session) uint32 {
+	t.Helper()
+	oldPeer := s.out.SPI()
+	done := make(chan error, 1)
+	go func() { done <- s.rekeyChild(s.ctx) }()
+	request, _ := readRekeyControl(t, p)
+	proposals, err := ikev2.ParseProposals(requirePayload(t, request, ikev2.SA))
+	if err != nil {
+		t.Fatal(err)
+	}
+	foundDH := false
+	for _, transform := range proposals[0].Transforms {
+		if transform.Type == 4 && transform.ID == 14 {
+			foundDH = true
+		}
+	}
+	if !foundDH {
+		t.Fatal("local rekey dropped peer-negotiated PFS")
+	}
+	localSPI := binary.BigEndian.Uint32(proposals[0].SPI)
+	peerSPI := uint32(0x61626364)
+	proposals[0].SPI = binary.BigEndian.AppendUint32(nil, peerSPI)
+	sa, _ := ikev2.EncodeProposals(proposals)
+	dh, err := vc.NewMODP(14, nil)
+	if err != nil {
+		t.Fatal(err)
+	}
+	shared, err := dh.Shared(requirePayload(t, request, ikev2.KE)[4:])
+	if err != nil {
+		t.Fatal(err)
+	}
+	ni, nr := requirePayload(t, request, ikev2.Nonce), bytes.Repeat([]byte{0x46}, 32)
+	ps := []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.Nonce, Data: nr}, {Type: ikev2.KE, Data: append([]byte{0, 14, 0, 0}, dh.Public...)}, {Type: ikev2.TSi, Data: requirePayload(t, request, ikev2.TSi)}, {Type: ikev2.TSr, Data: requirePayload(t, request, ikev2.TSr)}}
+	if err = p.response(request.Header, ps); err != nil {
+		t.Fatal(err)
+	}
+	deletion, _ := readRekeyControl(t, p)
+	if deletion.Header.Exchange != ikev2.Informational {
+		t.Fatal("PFS rekey did not switch SA")
+	}
+	if err = p.response(deletion.Header, []ikev2.Payload{childDelete(oldPeer)}); err != nil {
+		t.Fatal(err)
+	}
+	if err = <-done; err != nil {
+		t.Fatal(err)
+	}
+	toClient, fromClient := peerRekeySAs(t, p, localSPI, peerSPI, ni, nr, shared, false)
+	sendTunnelPacket(t, p, toClient)
+	receiveTunnelPacket(t, s)
+	checkOutboundRekey(t, p, s, fromClient)
+	return peerSPI
 }

@@ -39,7 +39,10 @@ type retiredChild struct {
 	expires time.Time
 }
 
-type childPair struct{ in, out *ipsec.SA }
+type childPair struct {
+	in, out *ipsec.SA
+	dhGroup uint16
+}
 
 type childRejection struct{ code uint16 }
 
@@ -136,6 +139,7 @@ func (s *Session) activateChild(pair *childPair) {
 	}
 	s.retiredChildren[s.in.SPI()] = retiredChild{in: s.in, peerSPI: s.out.SPI(), expires: minTime(now.Add(childOverlap), s.childCreated.Add(s.cfg.ChildLifetime))}
 	s.in, s.out = pair.in, pair.out
+	s.childDHGroup = pair.dhGroup
 	s.childCreated = now
 	select {
 	case s.childReset <- struct{}{}:
@@ -275,13 +279,26 @@ func (s *Session) rekeyChildAt(ctx context.Context, expectedDeadline time.Time) 
 	}
 	s.childMu.RLock()
 	oldLocal, oldPeer := s.in.SPI(), s.out.SPI()
+	group := s.childDHGroup
 	s.childMu.RUnlock()
-	sa, err := ikev2.EncodeProposals([]ikev2.Proposal{s.espProposal(spi)})
+	offer := s.espProposal(spi)
+	var dh *vc.MODP
+	if group != 0 {
+		offer.Transforms = append(offer.Transforms, ikev2.Transform{Type: 4, ID: group})
+		dh, err = vc.NewMODP(group, s.cfg.Random)
+		if err != nil {
+			return err
+		}
+	}
+	sa, err := ikev2.EncodeProposals([]ikev2.Proposal{offer})
 	if err != nil {
 		return err
 	}
 	// REKEY_SA identifies the SPI the exchange initiator receives (1.3.3).
 	ps := []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.Nonce, Data: ni}, childNotify(rekeySANotify, oldLocal)}
+	if dh != nil {
+		ps = append(ps, ikev2.Payload{Type: ikev2.KE, Data: append([]byte{byte(group >> 8), byte(group), 0, 0}, dh.Public...)})
+	}
 	ps = append(ps, s.rekeySelectors(true)...)
 	m, err := s.establishedExchangeLocked(ctx, ikev2.CreateChildSA, ps)
 	if err != nil {
@@ -294,7 +311,7 @@ func (s *Session) rekeyChildAt(ctx context.Context, expectedDeadline time.Time) 
 	if err != nil {
 		return err
 	}
-	proposal, err := validateProposal(sa, s.espProposal(spi))
+	proposal, err := validateProposal(sa, offer)
 	if err != nil {
 		return err
 	}
@@ -309,11 +326,29 @@ func (s *Session) rekeyChildAt(ctx context.Context, expectedDeadline time.Time) 
 	if err = s.checkRekeySelectors(m.Payloads, true); err != nil {
 		return err
 	}
-	if _, ok := ikev2.Find(m.Payloads, ikev2.KE); ok {
+	var shared []byte
+	if dh != nil {
+		ke, err := ikev2.One(m.Payloads, ikev2.KE)
+		if err != nil {
+			return err
+		}
+		if len(ke) < 4 || binary.BigEndian.Uint16(ke) != group {
+			return errors.New("Child SA rekey changed PFS group")
+		}
+		shared, err = dh.Shared(ke[4:])
+		if err != nil {
+			return err
+		}
+		defer clear(shared)
+	} else if _, ok := ikev2.Find(m.Payloads, ikev2.KE); ok {
 		return errors.New("unoffered Child SA rekey KE")
 	}
-	pair, err := s.deriveChildPair(spi, peerSPI, ni, nr, nil, true)
+	pair, err := s.deriveChildPair(spi, peerSPI, ni, nr, shared, true)
 	if err != nil {
+		return err
+	}
+	pair.dhGroup = group
+	if err = ctx.Err(); err != nil {
 		return err
 	}
 	s.activateChild(pair)
@@ -377,6 +412,9 @@ func (s *Session) preparePeerChild(ps []ikev2.Payload) ([]ikev2.Payload, *childP
 	if err != nil {
 		return reject(7)
 	}
+	s.childMu.RLock()
+	requiredGroup := s.childDHGroup
+	s.childMu.RUnlock()
 	var selected ikev2.Proposal
 	var group uint16
 	for _, proposal := range proposals {
@@ -386,6 +424,9 @@ func (s *Session) preparePeerChild(ps []ikev2.Payload) ([]ikev2.Payload, *childP
 			if t.Type == 4 {
 				g = t.ID
 			}
+		}
+		if requiredGroup != 0 && g != requiredGroup {
+			continue
 		}
 		if g != 0 {
 			if g != s.keyExchangeGroup {
@@ -441,6 +482,7 @@ func (s *Session) preparePeerChild(ps []ikev2.Payload) ([]ikev2.Payload, *childP
 	if err != nil {
 		return reject(temporaryFailureNotify)
 	}
+	pair.dhGroup = group
 	selected.SPI = binary.BigEndian.AppendUint32(nil, spi)
 	sa, err = ikev2.EncodeProposals([]ikev2.Proposal{selected})
 	if err != nil {
