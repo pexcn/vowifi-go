@@ -14,6 +14,8 @@ import (
 const maxMessage = 1 << 20
 
 type message struct {
+	generation uint64 // local flow identity; never serialized
+
 	Start   string
 	Headers map[string][]string
 	Body    []byte
@@ -199,7 +201,7 @@ func (m *message) bytes() ([]byte, error) {
 	return b.Bytes(), nil
 }
 func response(req *message, code int, reason string) *message {
-	m := &message{Start: fmt.Sprintf("SIP/2.0 %d %s", code, reason), Headers: make(map[string][]string), reply: req.reply}
+	m := &message{Start: fmt.Sprintf("SIP/2.0 %d %s", code, reason), Headers: make(map[string][]string), reply: req.reply, generation: req.generation}
 	for _, k := range []string{"via", "from", "to", "call-id", "cseq"} {
 		for _, v := range req.Headers[k] {
 			m.add(k, v)

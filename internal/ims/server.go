@@ -113,15 +113,28 @@ func (s *Service) isServerPeer(addr net.Addr) bool {
 	s.mu.Unlock()
 	return sameEndpoint(addr, expected)
 }
-func (s *Service) serverFailure(err error) {
+func (s *Service) serverFailure(udp net.PacketConn, tcp net.Listener, err error) {
 	s.mu.Lock()
-	active := !s.closed && s.ctx != nil && s.ctx.Err() == nil
-	cancel := s.cancel
+	active := !s.closed && s.ctx != nil && s.ctx.Err() == nil && (udp != nil && s.serverUDP == udp || tcp != nil && s.serverTCP == tcp)
+	c, g := s.conn, s.generation
+	if active {
+		s.serverBroken = true
+	}
 	s.mu.Unlock()
 	if active {
-		s.setReady(false, err)
-		cancel()
+		s.transportFailure(c, g, err)
 	}
+}
+func (s *Service) currentServer(udp net.PacketConn, tcp net.Listener) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	return !s.closed && (udp != nil && s.serverUDP == udp || tcp != nil && s.serverTCP == tcp)
+}
+func (s *Service) currentServerConn(c net.Conn) bool {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	_, ok := s.serverConns[c]
+	return !s.closed && ok
 }
 func (s *Service) serveSecurePackets(pc net.PacketConn) {
 	defer s.wg.Done()
@@ -129,10 +142,10 @@ func (s *Service) serveSecurePackets(pc net.PacketConn) {
 	for {
 		n, from, err := pc.ReadFrom(buf)
 		if err != nil {
-			s.serverFailure(fmt.Errorf("IMS protected UDP server: %w", err))
+			s.serverFailure(pc, nil, fmt.Errorf("IMS protected UDP server: %w", err))
 			return
 		}
-		if !s.isServerPeer(from) {
+		if !s.currentServer(pc, nil) || !s.isServerPeer(from) {
 			continue
 		}
 		if bytes.Equal(buf[:n], []byte("\r\n")) || bytes.Equal(buf[:n], []byte("\r\n\r\n")) {
@@ -146,6 +159,9 @@ func (s *Service) serveSecurePackets(pc net.PacketConn) {
 		m.reply = func(data []byte) error {
 			s.writeMu.Lock()
 			defer s.writeMu.Unlock()
+			if !s.currentServer(pc, nil) || !s.isServerPeer(from) {
+				return ErrFlowChanged
+			}
 			if err := pc.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 				return err
 			}
@@ -163,15 +179,15 @@ func (s *Service) serveSecureTCP(listener net.Listener) {
 	for {
 		c, err := listener.Accept()
 		if err != nil {
-			s.serverFailure(fmt.Errorf("IMS protected TCP server: %w", err))
+			s.serverFailure(nil, listener, fmt.Errorf("IMS protected TCP server: %w", err))
 			return
 		}
-		if !s.isServerPeer(c.RemoteAddr()) {
+		if !s.currentServer(nil, listener) || !s.isServerPeer(c.RemoteAddr()) {
 			c.Close()
 			continue
 		}
 		s.mu.Lock()
-		if s.closed {
+		if s.closed || s.serverTCP != listener {
 			s.mu.Unlock()
 			c.Close()
 			return
@@ -191,12 +207,15 @@ func (s *Service) readSecureTCP(c net.Conn) {
 		if err != nil {
 			return
 		}
-		if !s.isServerPeer(c.RemoteAddr()) {
+		if !s.currentServerConn(c) || !s.isServerPeer(c.RemoteAddr()) {
 			return
 		}
 		m.reply = func(data []byte) error {
 			s.writeMu.Lock()
 			defer s.writeMu.Unlock()
+			if !s.currentServerConn(c) || !s.isServerPeer(c.RemoteAddr()) {
+				return ErrFlowChanged
+			}
 			if err := c.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
 				return err
 			}

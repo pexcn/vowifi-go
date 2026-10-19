@@ -86,6 +86,10 @@ func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error)
 	id := token()
 	uri := "sip:" + url.PathEscape(code) + "@" + s.cfg.Realm + ";user=dialstring"
 	m := s.request("INVITE", uri, id)
+	flow, e := s.flowContext(m.generation)
+	if e != nil {
+		return USSDResult{}, e
+	}
 	m.set("content-type", "application/vnd.3gpp.ussd+xml")
 	m.set("accept", "application/vnd.3gpp.ussd+xml")
 	m.set("recv-info", "g.3gpp.ussd")
@@ -115,6 +119,7 @@ func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error)
 		return USSDResult{}, e
 	}
 	ack := s.request("ACK", uri, id)
+	ack.generation = m.generation
 	ack.set("from", m.get("from"))
 	ack.set("to", r.get("to"))
 	ack.set("cseq", strings.Split(m.get("cseq"), " ")[0]+" ACK")
@@ -167,6 +172,8 @@ func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error)
 		return USSDResult{}, ctx.Err()
 	case <-s.ctx.Done():
 		return USSDResult{}, s.ctx.Err()
+	case <-flow.Done():
+		return USSDResult{}, ErrFlowChanged
 	}
 }
 
@@ -187,6 +194,10 @@ func (s *Service) ContinueUSSD(ctx context.Context, id, input string) (USSDResul
 	s.ussdMu.Unlock()
 	if d == nil {
 		return USSDResult{}, errors.New("USSD dialog not found")
+	}
+	flow, err := s.flowContext(d.Invite.generation)
+	if err != nil {
+		return USSDResult{}, err
 	}
 	d.opMu.Lock()
 	defer d.opMu.Unlock()
@@ -224,6 +235,8 @@ func (s *Service) ContinueUSSD(ctx context.Context, id, input string) (USSDResul
 		return USSDResult{}, ctx.Err()
 	case <-s.ctx.Done():
 		return USSDResult{}, s.ctx.Err()
+	case <-flow.Done():
+		return USSDResult{}, ErrFlowChanged
 	}
 }
 func (s *Service) ussdRequest(d *ussdDialog, id, method string) *message {
@@ -232,6 +245,7 @@ func (s *Service) ussdRequest(d *ussdDialog, id, method string) *message {
 	routes := append([]string(nil), d.Routes...)
 	d.mu.Unlock()
 	m := s.request(method, uri, id)
+	m.generation = d.Invite.generation
 	m.set("from", from)
 	m.set("to", to)
 	if len(routes) > 0 {

@@ -168,6 +168,12 @@ func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCal
 		a.mu.Unlock()
 	}()
 	invite := a.service.request("INVITE", uri, callID)
+	flow, e := a.service.flowContext(invite.generation)
+	if e != nil {
+		return res, e
+	}
+	stopFlow := context.AfterFunc(flow, cancel)
+	defer stopFlow()
 	invite.set("from", "<"+a.service.cfg.PublicIdentity+">;tag="+token())
 	invite.set("content-type", "application/sdp")
 	invite.set("supported", "100rel")
@@ -197,6 +203,7 @@ func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCal
 		}
 		old := invite
 		invite = a.service.request("INVITE", uri, callID)
+		invite.generation = old.generation
 		invite.set("from", old.get("from"))
 		invite.set("content-type", "application/sdp")
 		invite.set("supported", "100rel")
@@ -284,7 +291,12 @@ func (a *VoiceAgent) challenge(ctx context.Context, m, r *message) error {
 		return fmt.Errorf("voice AKA resynchronization requires registration refresh (%s)", base64.StdEncoding.EncodeToString(aka.AUTS))
 	}
 	a.service.mu.Lock()
+	if a.service.generation != m.generation || a.service.flowCtx == nil || a.service.flowCtx.Err() != nil {
+		a.service.mu.Unlock()
+		return ErrFlowChanged
+	}
 	a.service.auth = ch
+	clear(a.service.password)
 	a.service.password = append([]byte(nil), aka.RES...)
 	a.service.authName = name
 	a.service.nonceCount = 0
@@ -379,7 +391,11 @@ func copyHeader(dst, src *message, key string) {
 	}
 }
 func (a *VoiceAgent) cancelInvite(c *voiceCall, m *message, responses <-chan *message, provisional bool) {
-	cancel := &message{Start: strings.Replace(m.Start, "INVITE ", "CANCEL ", 1), Headers: make(map[string][]string)}
+	flow, err := a.service.flowContext(m.generation)
+	if err != nil {
+		return
+	}
+	cancel := &message{generation: m.generation, Start: strings.Replace(m.Start, "INVITE ", "CANCEL ", 1), Headers: make(map[string][]string)}
 	for _, k := range []string{"via", "from", "to", "call-id", "route", "max-forwards"} {
 		copyHeader(cancel, m, k)
 	}
@@ -395,6 +411,8 @@ func (a *VoiceAgent) cancelInvite(c *voiceCall, m *message, responses <-chan *me
 		case <-timer.C:
 			return
 		case <-a.service.ctx.Done():
+			return
+		case <-flow.Done():
 			return
 		case r := <-responses:
 			if r.status() < 200 {
@@ -436,6 +454,7 @@ func (a *VoiceAgent) dialogRequest(c *voiceCall, method string) *message {
 		}
 	}
 	m := a.service.request(method, uri, c.invite.get("call-id"))
+	m.generation = c.invite.generation
 	m.set("from", c.invite.get("from"))
 	if c.answer != nil {
 		m.set("to", c.answer.get("to"))
@@ -451,7 +470,7 @@ func (a *VoiceAgent) dialogRequest(c *voiceCall, method string) *message {
 func (a *VoiceAgent) ack(c *voiceCall, r *message) error {
 	if r.status() >= 300 {
 		c.mu.Lock()
-		m := &message{Start: strings.Replace(c.invite.Start, "INVITE ", "ACK ", 1), Headers: make(map[string][]string)}
+		m := &message{generation: c.invite.generation, Start: strings.Replace(c.invite.Start, "INVITE ", "ACK ", 1), Headers: make(map[string][]string)}
 		for _, k := range []string{"via", "from", "call-id", "route", "max-forwards"} {
 			copyHeader(m, c.invite, k)
 		}

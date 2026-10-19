@@ -35,15 +35,17 @@ type Config struct {
 	SIM                       sim.AKAProvider
 	DialContext               DialContextFunc
 	// These listeners must use the same injected protected tunnel network as DialContext.
-	ListenPacket                           func(context.Context, string, string) (net.PacketConn, error)
-	ListenTCP                              func(context.Context, string, string) (net.Listener, error)
-	LocalAddress                           string
-	Expires, KeepAlive, TransactionTimeout time.Duration
-	OnSMS                                  func(sender, text string, at time.Time)
-	OnReport                               func(Report)
-	OnSend                                 func(messageID, to, text string, parts int) error
-	OnPart                                 func(messageID string, part SentPart) error
-	OnState                                func(bool, error)
+	ListenPacket                               func(context.Context, string, string) (net.PacketConn, error)
+	ListenTCP                                  func(context.Context, string, string) (net.Listener, error)
+	LocalAddress                               string
+	Expires, KeepAlive, TransactionTimeout     time.Duration
+	RecoveryInitial, RecoveryMax               time.Duration
+	TemporaryStatusCodes, ForbiddenStatusCodes []int
+	OnSMS                                      func(sender, text string, at time.Time)
+	OnReport                                   func(Report)
+	OnSend                                     func(messageID, to, text string, parts int) error
+	OnPart                                     func(messageID string, part SentPart) error
+	OnState                                    func(bool, error)
 	// AllowUnauthenticated is limited to explicit lab peers. Carrier use defaults to AKA.
 	AllowUnauthenticated bool
 	SecurityClient       *SecurityParameters
@@ -79,6 +81,15 @@ type Service struct {
 	ctx                                  context.Context
 	cancel                               context.CancelFunc
 	mu                                   sync.Mutex
+	stateMu                              sync.Mutex
+	flowCtx                              context.Context
+	flowCancel                           context.CancelFunc
+	serverBroken                         bool
+	everReady                            bool
+	registeredUntil                      time.Time
+	recovery                             chan struct{}
+	targets                              []registrarTarget
+	targetIndex                          int
 	conn                                 net.Conn
 	serverUDP                            net.PacketConn
 	serverTCP                            net.Listener
@@ -190,6 +201,20 @@ func New(c Config) (*Service, error) {
 	if c.KeepAlive <= 0 {
 		c.KeepAlive = 25 * time.Second
 	}
+	if c.RecoveryInitial <= 0 {
+		c.RecoveryInitial = time.Minute
+	}
+	if c.RecoveryMax < c.RecoveryInitial {
+		c.RecoveryMax = max(5*time.Minute, c.RecoveryInitial)
+	}
+	if c.TemporaryStatusCodes == nil {
+		c.TemporaryStatusCodes = []int{408, 429, 500, 502, 503, 504}
+	}
+	if c.ForbiddenStatusCodes == nil {
+		c.ForbiddenStatusCodes = []int{403}
+	}
+	c.TemporaryStatusCodes = append([]int{}, c.TemporaryStatusCodes...)
+	c.ForbiddenStatusCodes = append([]int{}, c.ForbiddenStatusCodes...)
 	if c.TransactionTimeout <= 0 {
 		c.TransactionTimeout = 32 * time.Second
 	}
@@ -199,26 +224,56 @@ func New(c Config) (*Service, error) {
 	if !strings.HasPrefix(c.PublicIdentity, "sip:") {
 		c.PublicIdentity = "sip:" + c.PublicIdentity
 	}
-	s := &Service{cfg: c, pending: make(map[string]chan *message), serverResponses: make(map[string]cachedResponse), callID: token(), tag: token(), smsPending: make(map[byte]smsReference), concats: make(map[string]*concatMessage), ussd: make(map[string]*ussdDialog)}
+	s := &Service{cfg: c, recovery: make(chan struct{}, 1), pending: make(map[string]chan *message), serverResponses: make(map[string]cachedResponse), callID: token(), tag: token(), smsPending: make(map[byte]smsReference), concats: make(map[string]*concatMessage), ussd: make(map[string]*ussdDialog)}
+	seen := map[string]bool{}
+	for _, addr := range c.PCSCF {
+		if !cleanValue(addr) {
+			return nil, errors.New("invalid P-CSCF")
+		}
+		if _, _, err := net.SplitHostPort(addr); err != nil {
+			addr = net.JoinHostPort(strings.Trim(addr, "[]"), "5060")
+		}
+		if !seen[addr] {
+			s.targets = append(s.targets, registrarTarget{address: addr})
+			seen[addr] = true
+		}
+	}
+	if len(s.targets) > 32 {
+		return nil, errors.New("too many P-CSCF candidates")
+	}
 	s.seq.Store(1)
 	return s, nil
 }
 func (s *Service) Ready() bool {
 	s.mu.Lock()
 	defer s.mu.Unlock()
-	return s.ready && !s.closed && s.ctx != nil && s.ctx.Err() == nil
+	return s.ready && !s.closed && !s.serverBroken && s.ctx != nil && s.ctx.Err() == nil && s.flowCtx != nil && s.flowCtx.Err() == nil && time.Now().Before(s.registeredUntil)
 }
-func (s *Service) setReady(v bool, e error) {
+func (s *Service) setReady(v bool, e error) bool {
+	s.stateMu.Lock()
+	defer s.stateMu.Unlock()
 	s.mu.Lock()
+	if s.closed || s.ctx == nil || s.ctx.Err() != nil {
+		s.mu.Unlock()
+		return false
+	}
+	if v && (s.conn == nil || s.flowCtx == nil || s.flowCtx.Err() != nil || s.serverBroken) {
+		s.mu.Unlock()
+		return false
+	}
 	changed := s.ready != v
 	s.ready = v
-	if e != nil {
+	if v {
+		s.lastErr = nil
+		s.everReady = true
+	} else if e != nil {
 		s.lastErr = e
 	}
 	s.mu.Unlock()
 	if s.cfg.OnState != nil && (changed || e != nil) {
 		s.cfg.OnState(v, e)
 	}
+	return true
 }
 func (s *Service) Start(ctx context.Context) error {
 	s.mu.Lock()
@@ -233,34 +288,46 @@ func (s *Service) Start(ctx context.Context) error {
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.mu.Unlock()
 	var last error
-	for _, addr := range s.cfg.PCSCF {
-		if !cleanValue(addr) {
-			last = errors.New("invalid P-CSCF")
+	for index := range s.targets {
+		if index > 0 {
+			if e := s.resetRegistration(); e != nil {
+				last = e
+				break
+			}
+		}
+		s.mu.Lock()
+		s.targetIndex = index
+		s.mu.Unlock()
+		if e := s.connect(s.ctx, s.cfg.DialContext, s.targets[index].address); e != nil {
+			last = &flowError{e}
 			continue
 		}
-		if _, _, e := net.SplitHostPort(addr); e != nil {
-			addr = net.JoinHostPort(strings.Trim(addr, "[]"), "5060")
+		last = s.register(s.ctx)
+		if last == nil && s.setReady(true, nil) {
+			s.mu.Lock()
+			if s.closed || s.ctx.Err() != nil {
+				s.mu.Unlock()
+				last = context.Canceled
+				break
+			}
+			s.wg.Add(2)
+			s.mu.Unlock()
+			go s.maintenance()
+			go s.keepaliveLoop()
+			return nil
 		}
-		if e := s.connect(s.ctx, s.cfg.DialContext, addr); e != nil {
-			last = e
-			continue
+		if last == nil {
+			last = &flowError{net.ErrClosed}
 		}
-		last = nil
-		break
+		var rejection *registrationError
+		if !recoverableRegistration(last) || errors.As(last, &rejection) && !containsCode(s.cfg.TemporaryStatusCodes, rejection.status) {
+			break
+		}
 	}
-	if last != nil {
-		_ = s.Close()
-		return fmt.Errorf("P-CSCF connection: %w", last)
-	}
-	if e := s.register(s.ctx); e != nil {
-		_ = s.Close()
-		return e
-	}
-	s.setReady(true, nil)
-	s.wg.Add(1)
-	go s.maintenance()
-	return nil
+	_ = s.Close()
+	return last
 }
+
 func (s *Service) connect(ctx context.Context, dial DialContextFunc, addr string) error {
 	s.mu.Lock()
 	if s.closed {
@@ -270,14 +337,23 @@ func (s *Service) connect(ctx context.Context, dial DialContextFunc, addr string
 	old := s.conn
 	s.conn = nil
 	s.generation++
+	if s.flowCancel != nil {
+		s.flowCancel()
+	}
+	s.flowCtx, s.flowCancel = context.WithCancel(s.ctx)
 	g := s.generation
 	s.mu.Unlock()
 	if old != nil {
 		old.Close()
 	}
-	c, e := dial(ctx, s.cfg.Transport, addr)
+	dialCtx, cancel := context.WithTimeout(ctx, s.cfg.TransactionTimeout)
+	c, e := dial(dialCtx, s.cfg.Transport, addr)
+	cancel()
 	if e != nil {
-		return e
+		return &flowError{e}
+	}
+	if c == nil {
+		return errors.New("IMS dialer returned no transport")
 	}
 	host := s.cfg.LocalAddress
 	if host == "" {
@@ -289,7 +365,7 @@ func (s *Service) connect(ctx context.Context, dial DialContextFunc, addr string
 	}
 	contact := s.contactFor(net.JoinHostPort(host, port))
 	s.mu.Lock()
-	if s.closed {
+	if s.closed || s.generation != g || ctx.Err() != nil || s.ctx.Err() != nil {
 		s.mu.Unlock()
 		c.Close()
 		return context.Canceled
@@ -320,6 +396,10 @@ func (s *Service) write(m *message) error {
 	}
 	if m.status() >= 200 {
 		s.mu.Lock()
+		if m.generation != 0 && m.generation != s.generation {
+			s.mu.Unlock()
+			return ErrFlowChanged
+		}
 		now := time.Now()
 		for k, v := range s.serverResponses {
 			if now.Sub(v.at) > 64*time.Second {
@@ -334,25 +414,52 @@ func (s *Service) write(m *message) error {
 	if m.reply != nil {
 		return m.reply(b)
 	}
-	return s.writeBytes(b)
+	s.mu.Lock()
+	c, g := s.conn, s.generation
+	s.mu.Unlock()
+	if m.generation != 0 && m.generation != g {
+		return ErrFlowChanged
+	}
+	return s.writeOn(c, g, b)
 }
 func (s *Service) writeBytes(b []byte) error {
+	s.mu.Lock()
+	c, g := s.conn, s.generation
+	s.mu.Unlock()
+	return s.writeOn(c, g, b)
+}
+func (s *Service) writeOn(c net.Conn, g uint64, b []byte) error {
 	s.writeMu.Lock()
 	defer s.writeMu.Unlock()
 	s.mu.Lock()
-	c := s.conn
+	current := !s.closed && s.conn == c && s.generation == g && s.flowCtx != nil && s.flowCtx.Err() == nil && s.ctx.Err() == nil
 	s.mu.Unlock()
+	if !current {
+		return ErrFlowChanged
+	}
 	if c == nil {
 		return ErrNotReady
 	}
-	if e := c.SetWriteDeadline(time.Now().Add(5 * time.Second)); e != nil {
-		return e
+	if err := c.SetWriteDeadline(time.Now().Add(5 * time.Second)); err != nil {
+		return &flowError{err}
 	}
-	n, e := c.Write(b)
-	if e == nil && n != len(b) {
-		return io.ErrShortWrite
+	n, err := c.Write(b)
+	if err == nil && n != len(b) {
+		err = io.ErrShortWrite
 	}
-	return e
+	if err != nil {
+		return &flowError{err}
+	}
+	return nil
+}
+func (s *Service) dispatchOn(m *message, c net.Conn, g uint64) {
+	s.mu.Lock()
+	current := !s.closed && s.conn == c && s.generation == g && s.flowCtx.Err() == nil
+	s.mu.Unlock()
+	if current {
+		m.generation = g
+		s.dispatch(m)
+	}
 }
 func transactionKey(m *message) string {
 	branch := ""
@@ -387,7 +494,12 @@ func (s *Service) dispatch(m *message) {
 		if m.reply != nil {
 			_ = m.reply(cached.data)
 		} else {
-			_ = s.writeBytes(cached.data)
+			s.mu.Lock()
+			c, g := s.conn, s.generation
+			s.mu.Unlock()
+			if m.generation == 0 || m.generation == g {
+				_ = s.writeOn(c, g, cached.data)
+			}
 		}
 		return
 	}
@@ -395,15 +507,7 @@ func (s *Service) dispatch(m *message) {
 }
 func (s *Service) readLoop(c net.Conn, g uint64) {
 	defer s.wg.Done()
-	fail := func(e error) {
-		s.mu.Lock()
-		current := s.generation == g && !s.closed
-		s.mu.Unlock()
-		if current {
-			s.setReady(false, e)
-			s.cancel()
-		}
-	}
+	fail := func(e error) { s.transportFailure(c, g, e) }
 
 	if s.cfg.Transport == "udp" {
 		b := make([]byte, 65536)
@@ -420,7 +524,7 @@ func (s *Service) readLoop(c net.Conn, g uint64) {
 			if e != nil {
 				continue
 			}
-			s.dispatch(m)
+			s.dispatchOn(m, c, g)
 		}
 	}
 	r := bufio.NewReaderSize(c, 8192)
@@ -430,18 +534,36 @@ func (s *Service) readLoop(c net.Conn, g uint64) {
 			fail(e)
 			return
 		}
-		s.dispatch(m)
+		s.dispatchOn(m, c, g)
 	}
 }
 func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 	key := transactionKey(m)
 	ch := make(chan *message, 8)
 	s.mu.Lock()
+	c, g, flowCtx := s.conn, s.generation, s.flowCtx
+	if m.generation != 0 && m.generation != g {
+		s.mu.Unlock()
+		return nil, ErrFlowChanged
+	}
+	if m.method() != "REGISTER" && (!s.ready || !time.Now().Before(s.registeredUntil)) {
+		s.mu.Unlock()
+		return nil, ErrNotReady
+	}
+	if c == nil || flowCtx == nil {
+		s.mu.Unlock()
+		return nil, ErrNotReady
+	}
 	s.pending[key] = ch
 	serviceCtx := s.ctx
 	s.mu.Unlock()
 	defer func() { s.mu.Lock(); delete(s.pending, key); s.mu.Unlock() }()
-	if e := s.write(m); e != nil {
+	wire, e := m.bytes()
+	if e != nil {
+		return nil, e
+	}
+	if e = s.writeOn(c, g, wire); e != nil {
+		s.transportFailure(c, g, e)
 		return nil, e
 	}
 	timeout := time.NewTimer(s.cfg.TransactionTimeout)
@@ -453,13 +575,28 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 		select {
 		case <-ctx.Done():
 			return nil, s.transactionFailure(ctx.Err())
+		case <-flowCtx.Done():
+			// A TCP peer can send a final response and immediately close. The
+			// read loop queues that response before marking the flow failed;
+			// preserve it (especially Retry-After), even if EOF wins select.
+			for {
+				select {
+				case r := <-ch:
+					if r.status() >= 200 {
+						return r, nil
+					}
+				default:
+					return nil, ErrFlowChanged
+				}
+			}
 		case <-serviceCtx.Done():
 			return nil, s.transactionFailure(serviceCtx.Err())
 		case <-timeout.C:
-			return nil, errors.New("SIP transaction timeout")
+			return nil, errTransactionTimeout
 		case <-retry.C:
 			if s.cfg.Transport == "udp" {
-				if e := s.write(m); e != nil {
+				if e := s.writeOn(c, g, wire); e != nil {
+					s.transportFailure(c, g, e)
 					return nil, e
 				}
 				interval *= 2
@@ -493,23 +630,22 @@ func (s *Service) transactionFailure(err error) error {
 func (s *Service) request(method, uri, callID string) *message {
 	m := &message{Start: method + " " + uri + " SIP/2.0", Headers: make(map[string][]string)}
 	s.mu.Lock()
-	c := s.conn
+	c, g, tag := s.conn, s.generation, s.tag
+	contact := s.contact
+	routes := append([]string(nil), s.routes...)
+	verify := s.securityVerify
 	s.mu.Unlock()
+	m.generation = g
 	local := "0.0.0.0:5060"
 	if c != nil {
 		local = c.LocalAddr().String()
 	}
 	m.set("via", "SIP/2.0/"+strings.ToUpper(s.cfg.Transport)+" "+local+";branch=z9hG4bK"+token()+";rport")
 	m.set("max-forwards", "70")
-	m.set("from", "<"+s.cfg.PublicIdentity+">;tag="+s.tag)
+	m.set("from", "<"+s.cfg.PublicIdentity+">;tag="+tag)
 	m.set("to", "<"+uri+">")
 	m.set("call-id", callID)
 	m.set("cseq", fmt.Sprintf("%d %s", s.seq.Add(1), method))
-	s.mu.Lock()
-	contact := s.contact
-	routes := append([]string(nil), s.routes...)
-	verify := s.securityVerify
-	s.mu.Unlock()
 	m.set("contact", contact)
 	m.set("user-agent", s.cfg.UserAgent)
 	for _, r := range routes {
@@ -547,9 +683,12 @@ func (s *Service) register(ctx context.Context) error {
 	s.mu.Unlock()
 	var auts string
 	for round := 0; round < 5; round++ {
-		m := s.request("REGISTER", uri, s.callID)
+		s.mu.Lock()
+		callID, expires := s.callID, s.cfg.Expires
+		s.mu.Unlock()
+		m := s.request("REGISTER", uri, callID)
 		m.set("to", "<"+s.cfg.PublicIdentity+">")
-		m.set("expires", strconv.Itoa(int(s.cfg.Expires.Seconds())))
+		m.set("expires", strconv.Itoa(max(1, int(expires.Seconds()))))
 		m.set("supported", "path, gruu, sec-agree")
 		m.set("accept", "application/sdp, application/vnd.3gpp.sms, application/vnd.3gpp.ussd+xml")
 		for name, value := range s.cfg.RegisterHeaders {
@@ -599,15 +738,23 @@ func (s *Service) register(ctx context.Context) error {
 			if !authenticated && !s.cfg.AllowUnauthenticated {
 				return errors.New("IMS REGISTER succeeded without required AKA authentication")
 			}
-			if s.cfg.SecurityClient != nil && s.securityVerify == "" {
+			s.mu.Lock()
+			verify := s.securityVerify
+			s.mu.Unlock()
+			if s.cfg.SecurityClient != nil && verify == "" {
 				return errors.New("IMS peer omitted required security agreement")
 			}
 			s.mu.Lock()
 			s.routes = append([]string(nil), r.Headers["service-route"]...)
 			s.mu.Unlock()
-			if ex, e := strconv.Atoi(r.get("expires")); e == nil && ex > 0 {
-				s.cfg.Expires = time.Duration(ex) * time.Second
+			expires, e = registrationExpiry(r, m.get("contact"), expires)
+			if e != nil {
+				return e
 			}
+			s.mu.Lock()
+			s.cfg.Expires = expires
+			s.registeredUntil = time.Now().Add(expires)
+			s.mu.Unlock()
 			return nil
 		case 401, 407:
 			h := "www-authenticate"
@@ -680,7 +827,9 @@ func (s *Service) register(ctx context.Context) error {
 			if e != nil || n <= 0 || n > 86400 {
 				return errors.New("invalid IMS Min-Expires")
 			}
+			s.mu.Lock()
 			s.cfg.Expires = time.Duration(n) * time.Second
+			s.mu.Unlock()
 		default:
 			phase := "initial"
 			if haveChallenge {
@@ -692,40 +841,10 @@ func (s *Service) register(ctx context.Context) error {
 			if s.cfg.OnRegistrationFailure != nil {
 				s.cfg.OnRegistrationFailure(phase, round+1, registrationDiagnostic(m), registrationDiagnostic(r))
 			}
-			return fmt.Errorf("IMS REGISTER rejected: %s (phase=%s, round=%d, transport=%s)", r.Start, phase, round+1, s.cfg.Transport)
+			return registrationRejected(r, phase, round+1, s.cfg.Transport)
 		}
 	}
 	return errors.New("IMS authentication round limit exceeded")
-}
-func (s *Service) maintenance() {
-	defer s.wg.Done()
-	delay := s.cfg.Expires * 8 / 10
-	if delay < time.Second {
-		delay = time.Second
-	}
-	refresh := time.NewTimer(delay)
-	defer refresh.Stop()
-	keep := time.NewTicker(s.cfg.KeepAlive)
-	defer keep.Stop()
-	for {
-		select {
-		case <-s.ctx.Done():
-			return
-		case <-refresh.C:
-			if e := s.register(s.ctx); e != nil {
-				s.setReady(false, e)
-				s.cancel()
-				return
-			}
-			refresh.Reset(s.cfg.Expires * 8 / 10)
-		case <-keep.C:
-			if e := s.writeBytes([]byte("\r\n\r\n")); e != nil {
-				s.setReady(false, e)
-				s.cancel()
-				return
-			}
-		}
-	}
 }
 func (s *Service) Close() error {
 	s.mu.Lock()
@@ -734,6 +853,9 @@ func (s *Service) Close() error {
 		return nil
 	}
 	s.closed = true
+	if s.flowCancel != nil {
+		s.flowCancel()
+	}
 	s.ready = false
 	c := s.conn
 	s.conn = nil
@@ -786,7 +908,8 @@ func (s *Service) handleRequest(m *message) {
 	}
 }
 
-// Done closes when transport or registration fails, the parent cancels, or Close is called.
+// Done closes on a terminal failure, parent cancellation or Close. Recoverable
+// IMS transport/registration loss is reported through readiness while SWu lives.
 func (s *Service) Done() <-chan struct{} {
 	s.mu.Lock()
 	defer s.mu.Unlock()
