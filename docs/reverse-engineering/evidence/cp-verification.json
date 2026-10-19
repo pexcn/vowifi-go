@@ -1,0 +1,108 @@
+[
+  {
+    "name": "cp-module-race",
+    "command": [
+      "go",
+      "test",
+      "-race",
+      "-count=1",
+      "./..."
+    ],
+    "environment": {
+      "CGO_ENABLED": "1"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 8.022
+  },
+  {
+    "name": "cp-module-vet",
+    "command": [
+      "go",
+      "vet",
+      "./..."
+    ],
+    "environment": {
+      "CGO_ENABLED": "0"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 0.542
+  },
+  {
+    "name": "cp-fuzz",
+    "command": [
+      "go",
+      "test",
+      "./engine/ikev2",
+      "-run=^$",
+      "-fuzz=FuzzIKECodecs",
+      "-fuzztime=3s",
+      "-parallel=2"
+    ],
+    "environment": {
+      "CGO_ENABLED": "0"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 4.66
+  },
+  {
+    "name": "cp-host-tests",
+    "command": [
+      "go",
+      "test",
+      "-p=1",
+      "-count=1",
+      "./internal/vowifihost",
+      "./internal/sim",
+      "./internal/device",
+      "./internal/e911",
+      "./internal/api"
+    ],
+    "environment": {
+      "CGO_ENABLED": "0"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 59.802
+  },
+  {
+    "name": "cp-build-amd64",
+    "command": [
+      "go",
+      "build",
+      "-trimpath",
+      "-buildvcs=false",
+      "-tags",
+      "with_utls nomsgpack",
+      "-o",
+      "/workspace/work/vowifi-analysis/vohive-cp-amd64",
+      "./cmd/vohive"
+    ],
+    "environment": {
+      "CGO_ENABLED": "0",
+      "GOOS": "linux",
+      "GOARCH": "amd64"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 6.568
+  },
+  {
+    "name": "cp-build-arm64",
+    "command": [
+      "go",
+      "build",
+      "-trimpath",
+      "-buildvcs=false",
+      "-tags",
+      "with_utls nomsgpack",
+      "-o",
+      "/workspace/work/vowifi-analysis/vohive-cp-arm64",
+      "./cmd/vohive"
+    ],
+    "environment": {
+      "CGO_ENABLED": "0",
+      "GOOS": "linux",
+      "GOARCH": "arm64"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 6.669
+  }
+]

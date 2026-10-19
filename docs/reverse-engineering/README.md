@@ -28,13 +28,28 @@
 | --- | --- | --- |
 | R01 | [原样保存的 REA Go build-info Evidence](evidence/go-build-info.json)，ID `ev_7659ee49f6b7c4e0ebfc4c8209c712279efcb3e27b4517ca9b95277b306dc26f` | 目标指纹、Go 版本、模块与构建参数；不证明函数行为 |
 | R02 | [REA 导出 bundle](evidence/rea-bundle.json) | 保存本轮实际取得的 Evidence schema；当前为 build-info 记录 |
+| R03 | [最终定点 REA bundle](evidence/rea-focused-bundle.json)、[导出回执](evidence/rea-focused-900-export.json)、[关闭回执](evidence/rea-focused-901-close.json) | 7 个函数的实际 Ghidra 伪代码记录及元数据；用于与指令/字段交叉核对，不是原始 Go 源码 |
 | L01 | [Go 函数表提取器](scripts/functions.go)，读取 `.gopclntab` | 69,081 个函数记录；私有模块前缀 2,419 个，含闭包/包装，并非 2,419 个功能 |
 | L02 | GNU `objdump` 定点反汇编及本目录 `evidence/*.asm` | 指令、分支和普通直接调用；间接调用不自动解析 |
 | L03 | [ELF / Go runtime descriptor 提取器](scripts/recover_artifact.py)、[类型字段](evidence/types.json)、[默认值](evidence/defaults.json)、[YAML 清单](evidence/presets-manifest.json) | 同一目标中的类型字段、初始化值、16 个嵌入 carrier YAML；属于本地静态观察/导出，不是 REA 返回值 |
 | H01 | 当前宿主 `internal/vowifihost`、`internal/device`、`internal/sim`、`internal/e911` 及测试 | 重写必须满足的当前 API/生命周期契约；不证明原版内部代码 |
 | HIST | 用户附件中的历史 E01：`ev_a6ab88c8998c88efbbf8976c523fd92d67dd357bdb46891dd117d970dfafe7c0` | 历史来源引用；未取得其完整原始记录，不伪装为本轮重新生成的 Evidence |
 
-REA/Ghidra 12.1.4 工具链已安装，但“请求 DONE”只代表调用结束。前轮 003–030 请求均返回 `execution_failure`：Ghidra 自动分析完成后，桥接的 Unix socket bind 被沙箱拒绝。补充尝试在允许本地 socket 后，Java readiness/cleanup 遇到 `/proc/<pid>/environ` ownership token 读取 EACCES，返回 `cleanup_incomplete`，后续函数调用为 `target_unavailable`。已导出有效元数据记录并请求关闭；关闭也返回 cleanup 警告。这些错误都不是伪代码证据，见 [逐调用状态](evidence/analysis-status.json)。
+REA/Ghidra 12.1.4 的前轮 003–030 请求均返回 `execution_failure`：Ghidra 自动分析完成后，桥接的 Unix socket bind 被沙箱拒绝。补充尝试在允许本地 socket 后，Java readiness/cleanup 遇到 `/proc/<pid>/environ` ownership token 读取 EACCES，返回 `cleanup_incomplete`，后续函数调用为 `target_unavailable`。这些错误都不是伪代码证据，见 [逐调用状态](evidence/analysis-status.json)。
+
+最终在允许本机进程可见性的执行权限上下文重试，保留 REA 自身的进程所有权保护。线程诊断定位到 `Reference` 和继承同一逻辑的 `Data Reference` 通用分析器开销过高；前两次慢查询被明确取消并完成进程清理。最终跳过两者及参数/栈等分析器的 profile 成功取得下面 **7 条函数伪代码 Evidence**，导出和 `close_binary` 都成功，所属 JVM 已退出。profile digest 为 `2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05`。[R03]
+
+| 函数地址 / 范围 | Evidence ID | 文本视图 |
+| --- | --- | --- |
+| `0xfd45c0` 缺失 AUTH 条件 | `ev_108b27356ffc9910fe8108b29f3a823b8863273db22fc038a60f97364a0f76f9` | [missing-auth](evidence/missing-auth.pseudo.txt) |
+| `0xfd4e20` AUTH decision callback | `ev_97489e301ab97fcc1aaf2a6ae49a60ef99bd2ee032e2b95990296f612db8dbf9` | [auth-decision](evidence/auth-decision.pseudo.txt) |
+| `0x10014e0` responder AUTH 验证入口 | `ev_3b13adde48c8f80f55fe1c5664514f337d95425244e04f47b1386f5d42f92a8c` | [verify-responder-auth](evidence/verify-responder-auth.pseudo.txt) |
+| `0xdb45c0` 全局默认值入口 | `ev_394d51be05d9e6d69af5c169dda58203f0e860055b38ac7fb15cc75abb1f623c` | [global-defaults](evidence/global-defaults.pseudo.txt) |
+| `0xdb3840` REGISTER 模板入口 | `ev_f0ffc11e0ea03ec583e1d9a8a2dcabe7071a01ce65702e6b50430ac33241d279` | [register-defaults](evidence/register-defaults.pseudo.txt) |
+| `0x139da00` TS43 BuildAuthAction | `ev_81efdab9e904b8b83645469fe4b75bd40b2c87dcb703201fef45484e783d4ce2` | [ts43-auth-action](evidence/ts43-auth-action.pseudo.txt) |
+| `0x13a1700` AT&T 初始 action 列表 | `ev_16f5aa4c9c7969b981719341b4500d25e642fd922724b26f4c9abe5f4d24b81e` | [att-initial-actions](evidence/att-initial-actions.pseudo.txt) |
+
+文本视图只去除了行尾空白；完整原始 normalized_result、profile、参数和限制保留在 bundle。该 profile 不提供完整参数、调用或引用覆盖，不能把这 7 个定点结果扩大为全模块反编译完成。
 
 此外，Ghidra 对 Go 1.26.3 报 `Untested Go version` 和缺少 bootstrap type info。即使取得 C 风格伪代码，也不能直接把其签名、栈变量或寄存器解释当成准确的 Go ABI。原始二进制没有被改写；未通过修改版本号、伪造 bootstrap 文件或关闭进程所有权保护掩盖问题。
 
@@ -71,7 +86,7 @@ IMS 注册主入口 `registerOnce` `0x10ea900` 和 `runAuthChallengeLoop` `0x10d
 
 ## 3. 对附件的关键修正：缺失 responder AUTH
 
-附件称“显式允许缺失 responder AUTH”，这句话缺少配置来源，应更正为**会话认证状态满足条件时的受限兼容分支**。[L02/L03]
+附件称“显式允许缺失 responder AUTH”，这句话缺少配置来源，应更正为**会话认证状态满足条件时的受限兼容分支**。[L02/L03/R03]
 
 `swu.(*Session).canAcceptMissingResponderAuth` `0xfd45c0` 读取 `Session` 字段，逐项检查：
 
@@ -173,6 +188,8 @@ python3 vowifi-go/docs/reverse-engineering/scripts/recover_artifact.py \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 work/vowifi-analysis/recovered
 go run vowifi-go/docs/reverse-engineering/scripts/functions.go \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 > work/vowifi-analysis/functions.jsonl
+python3 vowifi-go/docs/reverse-engineering/scripts/seeds.py \
+  work/vowifi-analysis/functions.jsonl work/vowifi-analysis/rea-seeds.tsv
 objdump -d --start-address=0xfd45c0 --stop-address=0xfd4780 \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64
 ```
@@ -183,9 +200,16 @@ objdump -d --start-address=0xfd45c0 --stop-address=0xfd4780 \
 可复用的 MCP 录制器会遇到结构化错误立即停止新的 native 查询，并仍尝试导出/关闭；返回非零不会被误判为成功。输出目录必须是新的，以保留每次尝试的边界：
 
 ```bash
+export REA_GHIDRA_SEED_FILE="$PWD/work/vowifi-analysis/rea-seeds.tsv"
+export REA_GHIDRA_STARTUP_TIMEOUT_MS=600000
+export REA_GHIDRA_DISABLED_ANALYZERS='Decompiler Parameter ID,Decompiler Switch Analysis,Stack,Function ID,Reference,Data Reference'
 python3 vowifi-go/docs/reverse-engineering/scripts/rea_capture.py \
   work/vowifi-analysis/vohive_v1.5.5-10u_linux_amd64 work/vowifi-analysis/rea-attempt-new \
   --procedure 0xfd45c0 --procedure 0x10014e0
 ```
 
-复现脚本本身经过语法检查；ELF 数据与函数表提取器已在本目标运行并与前轮结果比对。MCP 录制器复用本轮相同 stdio 协议，不宣称解决上述 native provider 环境限制。
+本轮定点 profile 通过 `REA_GHIDRA_SEED_FILE` 指定该 seeds 文件，SHA-256 应为 `c00415b3d1ee2154de540c47c39b08f83fe1daed9d92bdd403fd2cbf7a96a78d`，包含 2,419 个模块函数入口。大目标的通用引用分析器开销过高，因此定点重试显式设置：
+
+上述环境选项在启动 REA 录制器前设置。跳过分析器会减少参数、引用和全程序覆盖，不能用该 profile 做完整调用关系或“不存在引用”的证明；函数入口、指令及本地类型偏移仍需独立交叉核对。
+
+复现脚本经过实际运行；ELF 数据与函数表提取器已在本目标比对。seeds 生成器重新产生 2,419 条入口并匹配上述 SHA-256。MCP 录制器在最终权限/profile 下取得并导出 7 条函数记录；更换执行权限或分析 profile 仍可能改变可用性与覆盖。

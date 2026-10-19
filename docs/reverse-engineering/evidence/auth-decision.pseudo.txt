@@ -1,0 +1,64 @@
+
+undefined * github_com_iniwex5_vowifi_go_engine_swu___Session__executeIKEAuthDecision_func1(void)
+
+{
+  char *pcVar1;
+  int iVar2;
+  undefined *puVar3;
+  undefined8 *puVar4;
+  int unaff_RDX;
+  int unaff_R14;
+  bool bVar5;
+  undefined1 auVar6 [16];
+  undefined8 local_18;
+  undefined8 uStack_10;
+
+  while (&stack0x00000000 <= *(undefined1 **)(unaff_R14 + 0x10)) {
+    FUN_0048e160();
+  }
+  pcVar1 = *(char **)(unaff_RDX + 8);
+  if (pcVar1[0x20] == '\0') {
+    return (undefined *)0x0;
+  }
+  iVar2 = *(int *)(unaff_RDX + 0x40);
+  if (*(int *)(unaff_RDX + 0x10) != 0) {
+    auVar6 = (*(code *)**(undefined8 **)(unaff_RDX + 0x18))
+                       (*(int *)(unaff_RDX + 0x10),*(undefined8 *)(unaff_RDX + 0x38));
+    uStack_10 = auVar6._8_8_;
+    if (auVar6._0_8_ == 0) {
+      FUN_00b379c0(*(undefined8 *)(iVar2 + 0x498),&DAT_021e838e,0x20,0,0,0);
+      return (undefined *)0x0;
+    }
+    local_18 = *(undefined8 *)(auVar6._0_8_ + 8);
+    puVar3 = (undefined *)FUN_0051dfc0(&DAT_02224868,0x3b,&local_18,1,1);
+    if (puVar3 == (undefined *)0x0) {
+      puVar4 = (undefined8 *)FUN_00425680(&DAT_01da5ae0);
+      puVar4[1] = 0x3b;
+      *puVar4 = &DAT_02224868;
+      puVar3 = &DAT_02786320;
+    }
+    return puVar3;
+  }
+  if (*pcVar1 == '\x02') {
+    bVar5 = *(int *)(pcVar1 + 0x28) == 1;
+  }
+  else {
+    if (*pcVar1 != '\x03') goto LAB_00fd4ec5;
+    bVar5 = *(int *)(pcVar1 + 0x28) == 2;
+  }
+  if (bVar5) {
+    puVar3 = (undefined *)
+             github_com_iniwex5_vowifi_go_engine_swu___Session__canAcceptMissingResponderAuth(iVar2)
+    ;
+    if (puVar3 == (undefined *)0x0) {
+      FUN_00b37a60(*(undefined8 *)(iVar2 + 0x498),&DAT_0222d1f9,0x42,0,0,0);
+      return (undefined *)0x0;
+    }
+    return puVar3;
+  }
+LAB_00fd4ec5:
+  puVar4 = (undefined8 *)FUN_00425680(&DAT_01da5ae0);
+  puVar4[1] = 0x39;
+  *puVar4 = &DAT_02221d14;
+  return &DAT_02786320;
+}

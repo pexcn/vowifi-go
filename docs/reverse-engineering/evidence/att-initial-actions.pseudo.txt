@@ -1,0 +1,277 @@
+
+int github_com_iniwex5_vowifi_go_internal_vowifi_entitlement_providers_att_buildInitialActions
+              (undefined8 *param_1,int param_2,undefined8 param_3)
+
+{
+  undefined8 uVar1;
+  int iVar2;
+  undefined8 uVar3;
+  undefined8 *extraout_RAX;
+  undefined8 extraout_RCX;
+  undefined8 extraout_RCX_00;
+  undefined8 extraout_RCX_01;
+  undefined8 extraout_RCX_02;
+  undefined8 extraout_RCX_03;
+  undefined8 extraout_RCX_04;
+  int extraout_RBX;
+  undefined1 *puVar4;
+  undefined1 *unaff_RBP;
+  undefined1 *puVar5;
+  undefined8 extraout_RSI;
+  undefined8 extraout_RSI_00;
+  undefined8 *extraout_R8;
+  undefined8 *extraout_R8_00;
+  undefined8 *puVar6;
+  undefined8 *extraout_R11;
+  undefined8 *extraout_R11_00;
+  undefined8 *extraout_R11_01;
+  undefined8 *extraout_R11_02;
+  undefined8 *extraout_R11_03;
+  int unaff_R14;
+  undefined8 in_XMM15_Qa;
+  undefined8 in_XMM15_Qb;
+  undefined1 auVar7 [16];
+
+  do {
+    puVar4 = (undefined1 *)register0x00000020;
+    puVar5 = unaff_RBP;
+    if (*(undefined1 **)(unaff_R14 + 0x10) < (undefined1 *)((int)register0x00000020 + -0x1b0)) {
+      puVar5 = (undefined1 *)((int)register0x00000020 + -8);
+      *(undefined1 **)((int)register0x00000020 + -8) = unaff_RBP;
+      puVar4 = (undefined1 *)((int)register0x00000020 + -0x230);
+      *(undefined8 **)((int)register0x00000020 + 0x88) = param_1;
+      if (param_2 != 0) {
+        *(int *)((int)register0x00000020 + 0x90) = param_2;
+        *(undefined8 **)((int)register0x00000020 + 0x88) = param_1;
+        uVar3 = *param_1;
+        *(undefined8 *)((int)register0x00000020 + -0x230) =
+             *(undefined8 *)((int)register0x00000020 + 8);
+        *(undefined8 *)((int)register0x00000020 + -0x228) =
+             *(undefined8 *)((int)register0x00000020 + 0x10);
+        *(undefined8 *)((int)register0x00000020 + -0x220) =
+             *(undefined8 *)((int)register0x00000020 + 0x18);
+        *(undefined8 *)((int)register0x00000020 + -0x218) =
+             *(undefined8 *)((int)register0x00000020 + 0x20);
+        *(undefined8 *)((int)register0x00000020 + -0x210) =
+             *(undefined8 *)((int)register0x00000020 + 0x28);
+        *(undefined8 *)((int)register0x00000020 + -0x208) =
+             *(undefined8 *)((int)register0x00000020 + 0x30);
+        *(undefined8 *)((int)register0x00000020 + -0x200) =
+             *(undefined8 *)((int)register0x00000020 + 0x38);
+        *(undefined8 *)((int)register0x00000020 + -0x1f8) =
+             *(undefined8 *)((int)register0x00000020 + 0x40);
+        *(undefined8 *)((int)register0x00000020 + -0x1f0) =
+             *(undefined8 *)((int)register0x00000020 + 0x48);
+        *(undefined8 *)((int)register0x00000020 + -0x1e8) =
+             *(undefined8 *)((int)register0x00000020 + 0x50);
+        *(undefined8 *)((int)register0x00000020 + -0x1e0) =
+             *(undefined8 *)((int)register0x00000020 + 0x58);
+        *(undefined8 *)((int)register0x00000020 + -0x1d8) =
+             *(undefined8 *)((int)register0x00000020 + 0x60);
+        *(undefined8 *)((int)register0x00000020 + -0x1d0) =
+             *(undefined8 *)((int)register0x00000020 + 0x68);
+        *(undefined8 *)((int)register0x00000020 + -0x1c8) =
+             *(undefined8 *)((int)register0x00000020 + 0x70);
+        *(undefined8 *)((int)register0x00000020 + -0x1c0) =
+             *(undefined8 *)((int)register0x00000020 + 0x78);
+        *(undefined8 *)((int)register0x00000020 + -0x1b8) =
+             *(undefined8 *)((int)register0x00000020 + 0x80);
+        *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a179f;
+        github_com_iniwex5_vowifi_go_internal_vowifi_entitlement_ts43_BuildAuthAction(uVar3);
+        *(undefined8 *)((int)register0x00000020 + -0xd8) =
+             *(undefined8 *)((int)register0x00000020 + -0x1b0);
+        *(undefined8 *)((int)register0x00000020 + -0xd0) =
+             *(undefined8 *)((int)register0x00000020 + -0x1a8);
+        *(undefined8 *)((int)register0x00000020 + -200) =
+             *(undefined8 *)((int)register0x00000020 + -0x1a0);
+        *(undefined8 *)((int)register0x00000020 + -0xc0) =
+             *(undefined8 *)((int)register0x00000020 + -0x198);
+        *(undefined8 *)((int)register0x00000020 + -0xb8) =
+             *(undefined8 *)((int)register0x00000020 + -400);
+        *(undefined8 *)((int)register0x00000020 + -0xb0) =
+             *(undefined8 *)((int)register0x00000020 + -0x188);
+        *(undefined8 *)((int)register0x00000020 + -0xa8) =
+             *(undefined8 *)((int)register0x00000020 + -0x180);
+        *(undefined8 *)((int)register0x00000020 + -0xa0) =
+             *(undefined8 *)((int)register0x00000020 + -0x178);
+        *(undefined8 *)((int)register0x00000020 + -0x98) =
+             *(undefined8 *)((int)register0x00000020 + -0x170);
+        *(undefined8 *)((int)register0x00000020 + -0x90) =
+             *(undefined8 *)((int)register0x00000020 + -0x168);
+        *(undefined8 *)((int)register0x00000020 + -0x90) =
+             *(undefined8 *)((int)register0x00000020 + -0x168);
+        *(undefined8 *)((int)register0x00000020 + -0x88) =
+             *(undefined8 *)((int)register0x00000020 + -0x160);
+        *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a17fe;
+        auVar7 = FUN_00536080(*(undefined8 *)((int)register0x00000020 + 0x78),
+                              *(undefined8 *)((int)register0x00000020 + 0x80));
+        if (auVar7._8_8_ == 0) {
+          *(undefined8 *)((int)register0x00000020 + -0x58) = 6;
+          *(undefined **)((int)register0x00000020 + -0x60) = &DAT_021a704f;
+          if (1 < *(uint *)((int)register0x00000020 + 0x90)) {
+            *(undefined8 *)((int)register0x00000020 + -0x150) =
+                 *(undefined8 *)(*(int *)((int)register0x00000020 + 0x88) + 8);
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1865;
+            uVar3 = FUN_0048ab60(0,1,0,1,&DAT_01c5e8e0);
+            *(undefined8 *)((int)register0x00000020 + -0x68) = uVar3;
+            *(undefined8 *)((int)register0x00000020 + -0x140) = extraout_RCX;
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1894;
+            FUN_00486860(&DAT_01c5e8e0,uVar3,1,(undefined1 *)((int)register0x00000020 + -0x60),1);
+            *(undefined8 *)((int)register0x00000020 + -0x138) =
+                 *(undefined8 *)((int)register0x00000020 + -0x68);
+            *(undefined8 *)((int)register0x00000020 + -0x130) = 1;
+            *(undefined8 *)((int)register0x00000020 + -0x128) =
+                 *(undefined8 *)((int)register0x00000020 + -0x140);
+            *(undefined **)((int)register0x00000020 + -0x120) = &DAT_021b9a1e;
+            *(undefined8 *)((int)register0x00000020 + -0x118) = 0xe;
+            *(undefined8 *)((int)register0x00000020 + -0x110) =
+                 *(undefined8 *)((int)register0x00000020 + -0x150);
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a18f7;
+            uVar3 = FUN_00425680(&DAT_01c88800);
+            *(undefined8 *)((int)register0x00000020 + -0x70) = uVar3;
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1913;
+            auVar7 = FUN_00421860(&DAT_02042040,(undefined1 *)((int)register0x00000020 + -0xd8));
+            uVar3 = auVar7._0_8_;
+            puVar6 = *(undefined8 **)((int)register0x00000020 + -0x70);
+            *puVar6 = &DAT_02042040;
+            if (DAT_03b70350 != 0) {
+              uVar1 = puVar6[1];
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1937;
+              uVar3 = FUN_0048fb80(uVar3,auVar7._8_8_,uVar1);
+              *extraout_R11 = uVar3;
+              extraout_R11[1] = extraout_RCX_00;
+              puVar6 = extraout_R8;
+            }
+            puVar6[1] = uVar3;
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1956;
+            uVar3 = FUN_00421860(&DAT_01f4b940,(undefined1 *)((int)register0x00000020 + -0x138));
+            iVar2 = *(int *)((int)register0x00000020 + -0x70);
+            *(undefined **)(iVar2 + 0x10) = &DAT_01f4b940;
+            if (DAT_03b70350 != 0) {
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a197b;
+              uVar3 = FUN_0048fb80();
+              *extraout_R11_00 = uVar3;
+              extraout_R11_00[1] = extraout_RSI;
+            }
+            *(undefined8 *)(iVar2 + 0x18) = uVar3;
+            return iVar2;
+          }
+        }
+        else {
+          *(undefined1 (*) [16])((int)register0x00000020 + -0x90) = auVar7;
+          *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a19bf;
+          auVar7 = FUN_00536080(*(undefined8 *)((int)register0x00000020 + 0x58),
+                                *(undefined8 *)((int)register0x00000020 + 0x60));
+          *(int *)((int)register0x00000020 + -0x78) = auVar7._0_8_;
+          *(int *)((int)register0x00000020 + -0x140) = auVar7._8_8_;
+          *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a19e5;
+          auVar7 = FUN_00536080(*(undefined8 *)((int)register0x00000020 + 0x68),
+                                *(undefined8 *)((int)register0x00000020 + 0x70));
+          *(undefined8 *)((int)register0x00000020 + -0x40) = in_XMM15_Qa;
+          *(undefined8 *)((int)register0x00000020 + -0x38) = in_XMM15_Qb;
+          *(undefined8 *)((int)register0x00000020 + -0x30) = in_XMM15_Qa;
+          *(undefined8 *)((int)register0x00000020 + -0x28) = in_XMM15_Qb;
+          *(undefined8 *)((int)register0x00000020 + -0x20) = in_XMM15_Qa;
+          *(undefined8 *)((int)register0x00000020 + -0x18) = in_XMM15_Qb;
+          *(undefined8 *)((int)register0x00000020 + -0x18) = in_XMM15_Qa;
+          *(undefined8 *)((int)register0x00000020 + -0x10) = in_XMM15_Qb;
+          *(undefined8 *)((int)register0x00000020 + -0x40) =
+               *(undefined8 *)((int)register0x00000020 + -0x78);
+          *(undefined8 *)((int)register0x00000020 + -0x38) =
+               *(undefined8 *)((int)register0x00000020 + -0x140);
+          *(undefined **)((int)register0x00000020 + -0x30) = &DAT_021e0c7a;
+          *(undefined8 *)((int)register0x00000020 + -0x28) = 0x1d;
+          if (1 < *(uint *)((int)register0x00000020 + 0x90)) {
+            *(undefined8 *)((int)register0x00000020 + -0x20) =
+                 *(undefined8 *)(*(int *)((int)register0x00000020 + 0x88) + 8);
+            *(undefined1 (*) [16])((int)register0x00000020 + -0x18) = auVar7;
+            *(undefined8 *)((int)register0x00000020 + -0x48) = 6;
+            *(undefined **)((int)register0x00000020 + -0x50) = &DAT_021a704f;
+            if (2 < *(uint *)((int)register0x00000020 + 0x90)) {
+              *(undefined8 *)((int)register0x00000020 + -0x148) =
+                   *(undefined8 *)(*(int *)((int)register0x00000020 + 0x88) + 0x10);
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1aba;
+              uVar3 = FUN_0048ab60(0,1,0,1,&DAT_01c5e8e0);
+              *(undefined8 *)((int)register0x00000020 + -0x68) = uVar3;
+              *(undefined8 *)((int)register0x00000020 + -0x140) = extraout_RCX_01;
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1ae9;
+              FUN_00486860(&DAT_01c5e8e0,uVar3,1,(undefined1 *)((int)register0x00000020 + -0x50),1);
+              *(undefined8 *)((int)register0x00000020 + -0x108) =
+                   *(undefined8 *)((int)register0x00000020 + -0x68);
+              *(undefined8 *)((int)register0x00000020 + -0x100) = 1;
+              *(undefined8 *)((int)register0x00000020 + -0xf8) =
+                   *(undefined8 *)((int)register0x00000020 + -0x140);
+              *(undefined **)((int)register0x00000020 + -0xf0) = &DAT_021b9a1e;
+              *(undefined8 *)((int)register0x00000020 + -0xe8) = 0xe;
+              *(undefined8 *)((int)register0x00000020 + -0xe0) =
+                   *(undefined8 *)((int)register0x00000020 + -0x148);
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1b4c;
+              uVar3 = FUN_00425680(&DAT_01c88fe0);
+              *(undefined8 *)((int)register0x00000020 + -0x80) = uVar3;
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1b68;
+              auVar7 = FUN_00421860(&DAT_02042040,(undefined1 *)((int)register0x00000020 + -0xd8));
+              uVar3 = auVar7._0_8_;
+              puVar6 = *(undefined8 **)((int)register0x00000020 + -0x80);
+              *puVar6 = &DAT_02042040;
+              if (DAT_03b70350 != 0) {
+                uVar1 = puVar6[1];
+                *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1b8c;
+                uVar3 = FUN_0048fb80(uVar3,auVar7._8_8_,uVar1);
+                *extraout_R11_01 = uVar3;
+                extraout_R11_01[1] = extraout_RCX_02;
+                puVar6 = extraout_R8_00;
+              }
+              puVar6[1] = uVar3;
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1bab;
+              auVar7 = FUN_00421860(&DAT_01fc95c0,(undefined1 *)((int)register0x00000020 + -0x40));
+              uVar3 = auVar7._0_8_;
+              iVar2 = *(int *)((int)register0x00000020 + -0x80);
+              *(undefined **)(iVar2 + 0x10) = &DAT_01fc95c0;
+              if (DAT_03b70350 != 0) {
+                uVar1 = *(undefined8 *)(iVar2 + 0x18);
+                *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1bd0;
+                uVar3 = FUN_0048fb80(uVar3,auVar7._8_8_,uVar1);
+                *extraout_R11_02 = uVar3;
+                extraout_R11_02[1] = extraout_RCX_03;
+              }
+              *(undefined8 *)(iVar2 + 0x18) = uVar3;
+              *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1bef;
+              uVar3 = FUN_00421860(&DAT_01f4b940,(undefined1 *)((int)register0x00000020 + -0x108));
+              iVar2 = *(int *)((int)register0x00000020 + -0x80);
+              *(undefined **)(iVar2 + 0x20) = &DAT_01f4b940;
+              if (DAT_03b70350 != 0) {
+                *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1c14;
+                uVar3 = FUN_0048fb80();
+                *extraout_R11_03 = uVar3;
+                extraout_R11_03[1] = extraout_RSI_00;
+              }
+              *(undefined8 *)(iVar2 + 0x28) = uVar3;
+              return iVar2;
+            }
+            *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1c38;
+            FUN_0048ff20();
+          }
+          *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1c3d;
+          FUN_0048ff20();
+        }
+        *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1c45;
+        FUN_0048ff20();
+      }
+      *(undefined8 *)((int)register0x00000020 + -0x238) = 0x13a1c4a;
+      FUN_0048ff20();
+      param_1 = extraout_RAX;
+      param_3 = extraout_RCX_04;
+      param_2 = extraout_RBX;
+    }
+    *(undefined8 **)(puVar4 + 0x88) = param_1;
+    *(int *)(puVar4 + 0x90) = param_2;
+    *(undefined8 *)(puVar4 + 0x98) = param_3;
+    *(undefined8 *)(puVar4 + -8) = 0x13a1c68;
+    FUN_0048e200();
+    param_1 = *(undefined8 **)(puVar4 + 0x88);
+    param_2 = *(int *)(puVar4 + 0x90);
+    param_3 = *(undefined8 *)(puVar4 + 0x98);
+    register0x00000020 = (BADSPACEBASE *)puVar4;
+    unaff_RBP = puVar5;
+  } while( true );
+}

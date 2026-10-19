@@ -12,6 +12,14 @@ The observations below are ordinary local ELF/type metadata and instruction
 analysis, not recovered original source or a claim of REA decompiler coverage.
 Scratch evidence: `/workspace/work/vowifi-analysis/recovered/`.
 
+Final REA recovery also obtained pseudocode for BuildAuthAction and
+buildInitialActions: Evidence
+`ev_81efdab9e904b8b83645469fe4b75bd40b2c87dcb703201fef45484e783d4ce2`
+and `ev_16f5aa4c9c7969b981719341b4500d25e642fd922724b26f4c9abe5f4d24b81e`.
+The reverse-engineering report retains the bundle/profile. These two focused
+records corroborate action construction; Go 1.26.3 types/ABI remain unreliable,
+and the other observations below continue to be local instruction/type evidence.
+
 - `ts43.BuildAuthAction` at `0x139da00`: static initializer `0x27ac638`
   identifies `auth-type: EAP-AKA`, `action-name: getAuthentication`. Runtime type
   metadata gives subscriber-id, request-id, unique-id and optional token fields.

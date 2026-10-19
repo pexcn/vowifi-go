@@ -1,0 +1,29 @@
+
+void github_com_iniwex5_vowifi_go_internal_vowifi_entitlement_ts43_BuildAuthAction
+               (undefined8 param_1)
+
+{
+  int unaff_R14;
+  undefined8 in_stack_00000008;
+  undefined8 in_stack_00000010;
+  undefined8 in_stack_00000028;
+  undefined8 in_stack_00000030;
+  undefined8 in_stack_00000038;
+  undefined8 in_stack_00000040;
+  undefined8 in_stack_00000048;
+  undefined8 in_stack_00000050;
+  undefined8 in_stack_00000078;
+  undefined8 in_stack_00000080;
+  undefined8 uStack00000000000000e0;
+
+  uStack00000000000000e0 = param_1;
+  while (&stack0x00000000 <= *(undefined1 **)(unaff_R14 + 0x10)) {
+    FUN_0048e200();
+  }
+  github_com_iniwex5_vowifi_go_internal_vowifi_entitlement_ts43_BuildSubscriberID
+            (in_stack_00000008,in_stack_00000010,in_stack_00000038,in_stack_00000040,
+             in_stack_00000048,in_stack_00000050);
+  FUN_00536080(in_stack_00000028,in_stack_00000030);
+  FUN_00536080(in_stack_00000078,in_stack_00000080);
+  return;
+}

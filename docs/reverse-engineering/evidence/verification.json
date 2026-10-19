@@ -167,5 +167,21 @@
     "environment": {},
     "exit_code": 0,
     "elapsed_seconds": 1.346
+  },
+  {
+    "name": "host-after-isolated-fixture",
+    "cwd": "/workspace/vohive",
+    "command": [
+      "go",
+      "test",
+      "-p=1",
+      "-count=1",
+      "./..."
+    ],
+    "environment": {
+      "CGO_ENABLED": "0"
+    },
+    "exit_code": 0,
+    "elapsed_seconds": 76.394
   }
 ]

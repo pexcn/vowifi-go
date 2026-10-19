@@ -8,7 +8,7 @@
 
 | 层 | 已实现 | 当前边界 |
 | --- | --- | --- |
-| SWu | IKE_SA_INIT、COOKIE、500→4500 NAT-T、IKE_AUTH、经典 EAP-AKA、AUTS、证书/主机名/AUTH/MAC 校验、Child SA、CP/TS、DPD、NAT keepalive | AES-CBC 128/256 + SHA1/SHA256，DH14；不支持 GCM、DH2、SHA512、AKA′、fast reauth、IKE fragmentation、MOBIKE、Child/IKE rekey |
+| SWu | IKE_SA_INIT、COOKIE、INVALID_KE_PAYLOAD、500→4500 NAT-T、IKE_AUTH、经典 EAP-AKA、AUTS、证书/主机名/AUTH/MAC 校验、Child SA、CP/TS、DPD、NAT keepalive | AES-CBC 128/256 + SHA1/SHA256，默认 DH14、配置明确提出时支持 DH2；不支持 GCM、SHA512、AKA′、fast reauth、IKE fragmentation、MOBIKE、Child/IKE rekey |
 | 数据面 | 双向 ESP、完整性、64 包 replay window、用户态 IPv4/IPv6、隧道内 TCP/UDP/DNS、SOCKS5 UDP | 不操作主机路由或 XFRM/TUN；IPv6 扩展头、分片、ESN/完整 PMTU 仍不支持 |
 | IMS | REGISTER、401/407 AKA Digest、AUTS、刷新、SIP transaction、P-CSCF 选择、`ipsec-3gpp` 四组 SA | SIP UDP/TCP；内层支持 AES-CBC/null + HMAC-SHA1-96/MD5-96；认证或安全协商失败不会报告 ready |
 | 短信 | GSM-7/UCS2、长短信分片/重组、RP-DATA/ACK/ERROR、SIP MESSAGE、持久化与报告关联 | SIP 2xx 仅表示接受；RP-ACK 表示 RP 提交确认，不等于收件人最终送达；完整 TP status-report 生命周期仍未实现 |
@@ -18,6 +18,16 @@
 | 生命周期 | 宿主 API、独立就绪阶段、代次取消、逆序清理、失败清理保留重试、observer 顺序、voice agent 所有权 | 持续实网运行、真实 SIM 切换和资源压力仍需设备验收 |
 
 SA 生命周期到期或收到暂不支持的 rekey 时会停止会话并报告错误，需要重新连接；不会继续使用过期的 SA。生产长期在线应先完成 rekey/重连的实网验收。
+
+宿主默认通过 RFC 5998 的 `EAP_ONLY_AUTHENTICATION` 通知协商 EAP-only：首轮可以没有证书 AUTH，经过 EAP-AKA 的 AUTN/AT_MAC、EAP Success 和最终 MSK AUTH 验证后才建立 Child SA。如果对端仍发送证书 AUTH，必须正常验证，不会在证书或签名错误后回退。直接使用 SWu 引擎的调用者需显式设置 `Config.EAPOnlyAuthentication`；关闭时保留证书优先流程。见 [首轮 EAP-only 修复说明](docs/reverse-engineering/eap-only-authentication.md)。
+
+原版在完成经典 mutual EAP-AKA 并持有 MSK 等条件下有受限的缺失 responder AUTH 兼容分支；本实现仍按 RFC 5998 要求最终 MSK AUTH。这个认证策略差异可能影响部分 ePDG 的互通，不能把本实现的行为等同于已复刻原版全部兼容分支。
+
+CP 接收端按 RFC 7296 忽略保留字段，并在完整标准 TLV 解析失败时尝试原版支持的 TV 短属性编码。错误配置类型、截断报文和没有有效本地地址仍会失败，见 [CFG_REPLY 兼容与诊断说明](docs/reverse-engineering/cp-configuration-compatibility.md)。
+
+宿主启用 `Config.EPDGFailover`：仅在首轮 IKE_SA_INIT 没有收到任何可交付的 datagram 时，优先尝试其他已解析 ePDG 地址的原配置端口，再尝试 UDP 4500，最多八个地址/端口组合；备用组合最多发送三次初始请求。每次重新生成 SPI、DH 和 nonce，保留原始认证主机名及全部认证校验。收到错误通知、COOKIE 后超时、解析错误或认证失败均不触发该地址回退；自定义传输和非标准端口也不自动回退。超时诊断包含 endpoint 和全部解析 IP。运营商 `dns_server` 配置会透传给 ePDG 解析器，留空仍使用系统解析器。
+
+宿主会保留运营商配置中本引擎支持、且有匹配 ESP 参数的 IKE 提议，默认提议优先。仅允许服务器选择其中一组；收到 `INVALID_KE_PAYLOAD` 时，只能向已提出的 DH 组重新发起一次握手。DH2（MODP_1024）/SHA1 用于 Vodafone UK 原版日志所示的兼容组合，不会在未配置的情况下自动添加，见 [Vodafone UK 对照说明](docs/reverse-engineering/vodafone-uk-negotiation.md)。
 
 16 份 carrier YAML 是从目标二进制逐字节提取的历史配置，**不是 16 个已经验证互通的运营商**。配置保留原文和来源；当前引擎只能选择双方允许且自己实现的算法组合，没有可用组合时明确返回错误。例如 2degrees 的 SHA512/DH2 画像目前不能由此引擎运行。标准 AT_CHECKCODE 已按 RFC 4187 实现；`minimal/omit/checkcode` 的响应选项采用本实现的明确语义，不能据此声称已恢复原版全部 vendor 行为。设备画像生成和完整 REGISTER fallback/policy 行为仍不兼容。
 
@@ -37,8 +47,8 @@ go test -race ./...
 从宿主根目录构建，先按宿主开发流程准备 `internal/web/dist`：
 
 ```bash
-go test ./internal/vowifihost ./internal/sim ./internal/device ./internal/e911 ./internal/api
-go build -trimpath -buildvcs=false -tags 'with_utls nomsgpack' ./cmd/vohive
+CGO_ENABLED=0 go test ./internal/vowifihost ./internal/sim ./internal/device ./internal/e911 ./internal/api
+CGO_ENABLED=0 go build -trimpath -buildvcs=false -tags 'with_utls nomsgpack' ./cmd/vohive
 ```
 
 CI 分开运行模块竞态测试、宿主集成测试和构建。Docker 在 `go mod download` 前复制本地模块，构建不再尝试下载闭源 vowifi-go。

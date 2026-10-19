@@ -1,0 +1,40 @@
+
+undefined *
+github_com_iniwex5_vowifi_go_engine_swu___Session__canAcceptMissingResponderAuth(int param_1)
+
+{
+  undefined *puVar1;
+  undefined8 *puVar2;
+  int unaff_R14;
+  undefined *local_18;
+  undefined *puStack_10;
+
+  while (&stack0x00000000 <= *(undefined1 **)(unaff_R14 + 0x10)) {
+    FUN_0048e200();
+  }
+  if (*(char *)(param_1 + 0x3f8) == '\0') {
+    puVar2 = (undefined8 *)FUN_00425680(&DAT_01da5ae0);
+    puVar2[1] = 0x33;
+    *puVar2 = &DAT_022180b9;
+    return &DAT_02786320;
+  }
+  if (*(int *)(param_1 + 0x360) == 0) {
+    puVar2 = (undefined8 *)FUN_00425680(&DAT_01da5ae0);
+    puVar2[1] = 0x2b;
+    *puVar2 = &DAT_022082ae;
+    return &DAT_02786320;
+  }
+  if (*(char *)(param_1 + 0x3f9) != '\x17') {
+    local_18 = &DAT_01c5e960;
+    puStack_10 = &DAT_027dfb40 + (uint)*(byte *)(param_1 + 0x3f9) * 8;
+    puVar1 = (undefined *)FUN_0051dfc0(&DAT_0223784d,0x4d,&local_18,1,1);
+    if (puVar1 == (undefined *)0x0) {
+      puVar2 = (undefined8 *)FUN_00425680(&DAT_01da5ae0);
+      puVar2[1] = 0x4d;
+      *puVar2 = &DAT_0223784d;
+      puVar1 = &DAT_02786320;
+    }
+    return puVar1;
+  }
+  return (undefined *)0x0;
+}

@@ -1,7 +1,7 @@
 {
   "format": "vohive-local-analysis-status-v1",
   "target_sha256": "2b080980c72fede3dbad1c9f8830bb51d0bc368b4acb576c4f2d27f9182eb59f",
-  "rea_function_evidence_count": 0,
+  "rea_function_evidence_count": 7,
   "rea_metadata_evidence_id": "ev_7659ee49f6b7c4e0ebfc4c8209c712279efcb3e27b4517ca9b95277b306dc26f",
   "historical_guide_evidence_id": "ev_a6ab88c8998c88efbbf8976c523fd92d67dd357bdb46891dd117d970dfafe7c0",
   "historical_guide_evidence_revalidated": false,
@@ -154,9 +154,86 @@
   "target_executed": false,
   "carrier_network_contacted": false,
   "limitations": [
-    "Go1.26.3 untested / missing bootstrap types in Ghidra12.1.4",
-    "Prior Ghidra auto-analysis completed but local Unix socket bind was denied",
-    "Resume readiness/close failed process ownership observation: environment_errno_EACCES",
-    "No successful function pseudocode Evidence records; local objdump/ELF observations are not REA records"
+    "Go1.26.3 untested / missing bootstrap types in Ghidra12.1.4; C types, signatures and register interpretation are not reliable Go ABI reconstruction.",
+    "Prior sandbox and ownership failures remain recorded; successful final recovery used the host permission context while preserving REA process ownership protection.",
+    "Final profile disables parameter, stack, function-ID and both generic reference analyzers; no complete call/reference coverage is claimed.",
+    "External function seeds are original Go function-table observations; they are caller-supplied metadata rather than Ghidra discoveries.",
+    "Original target was never executed; no carrier network interoperability was observed."
+  ],
+  "successful_native_recovery": {
+    "provider": "ghidra",
+    "provider_version": "12.1.4",
+    "analysis_profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05",
+    "seed_sha256": "c00415b3d1ee2154de540c47c39b08f83fe1daed9d92bdd403fd2cbf7a96a78d",
+    "seed_entries": 2419,
+    "disabled_analyzers": [
+      "Decompiler Parameter ID",
+      "Decompiler Switch Analysis",
+      "Stack",
+      "Function ID",
+      "Reference",
+      "Data Reference"
+    ],
+    "procedures": [
+      {
+        "procedure": "0xfd45c0",
+        "evidence_id": "ev_108b27356ffc9910fe8108b29f3a823b8863273db22fc038a60f97364a0f76f9",
+        "file": "missing-auth.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0x13a1700",
+        "evidence_id": "ev_16f5aa4c9c7969b981719341b4500d25e642fd922724b26f4c9abe5f4d24b81e",
+        "file": "att-initial-actions.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0xdb45c0",
+        "evidence_id": "ev_394d51be05d9e6d69af5c169dda58203f0e860055b38ac7fb15cc75abb1f623c",
+        "file": "global-defaults.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0x10014e0",
+        "evidence_id": "ev_3b13adde48c8f80f55fe1c5664514f337d95425244e04f47b1386f5d42f92a8c",
+        "file": "verify-responder-auth.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0x139da00",
+        "evidence_id": "ev_81efdab9e904b8b83645469fe4b75bd40b2c87dcb703201fef45484e783d4ce2",
+        "file": "ts43-auth-action.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0xfd4e20",
+        "evidence_id": "ev_97489e301ab97fcc1aaf2a6ae49a60ef99bd2ee032e2b95990296f612db8dbf9",
+        "file": "auth-decision.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      },
+      {
+        "procedure": "0xdb3840",
+        "evidence_id": "ev_f0ffc11e0ea03ec583e1d9a8a2dcabe7071a01ce65702e6b50430ac33241d279",
+        "file": "register-defaults.pseudo.txt",
+        "profile_digest": "2aa7d161015113628972a9adeaea62d6545ed8d9ceed73c792d64301b9635c05"
+      }
+    ],
+    "export_status": "success",
+    "close_status": "success",
+    "owned_jvm_stopped": true
+  },
+  "additional_cancelled_attempts": [
+    {
+      "name": "CLI native before focused profile",
+      "status": "cancelled",
+      "code": "cancelled",
+      "cleanup": "complete",
+      "reason": "Diagnosed excessive OperandReferenceAnalyzer traversal; cancelled through CLI signal handler."
+    },
+    {
+      "name": "MCP first focused profile",
+      "status": "cancelled",
+      "reason": "Data Reference inherits OperandReferenceAnalyzer; disabled Reference alone did not remove bottleneck. MCP managed shutdown stopped the owned JVM."
+    }
   ]
 }
