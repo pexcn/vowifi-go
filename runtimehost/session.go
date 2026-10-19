@@ -121,22 +121,17 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 			return network.DialContextWithLocalPort(c, proto, address, selectedLocal, a.Client.PortClient)
 		}, nil
 	}
+	var imsStateMu sync.Mutex
+	imsStarted := false
+
 	imsCfg.OnState = func(ready bool, cause error) {
-		if ready {
-			return
-		}
-		if cause != nil {
-			inst.update(func(s *State) {
-				s.Phase = PhaseFailed
-				s.IMSReady = false
-				s.SMSReady = false
-				s.LastErrorClass = "ims_disconnected"
-				s.LastError = cause.Error()
-				s.LastReason = cause.Error()
-			})
-			inst.cancel()
+		imsStateMu.Lock()
+		defer imsStateMu.Unlock()
+		if imsStarted {
+			reportIMSState(ctx, req, inst, ready, cause)
 		}
 	}
+
 	imsCfg.OnSMS = func(sender, text string, at time.Time) {
 		inst.Dispatch(ctx, eventhost.SMSReceived{DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
 	}
@@ -160,15 +155,27 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	inst.mu.Lock()
 	inst.service = &messagingService{service: svc, store: req.DeliveryStore, dispatch: inst, deviceID: req.DeviceID}
 	inst.mu.Unlock()
-	inst.update(func(s *State) {
-		s.Phase = PhaseReady
-		s.IMSReady = true
-		s.SMSReady = true
-		s.LastReason = PhaseSMSReady
-	})
 	if err = registerVoice(ctx, req, inst, svc, network, localIP); err != nil {
 		return err
 	}
+	imsStateMu.Lock()
+	imsStarted = true
+	if svc.Ready() {
+		reportIMSState(ctx, req, inst, true, nil)
+	} else {
+		select {
+		case <-svc.Done():
+			imsStateMu.Unlock()
+			if err := svc.Err(); err != nil {
+				return err
+			}
+			return context.Canceled
+		default:
+			reportIMSState(ctx, req, inst, false, errors.Join(ims.ErrRecovering, svc.Err()))
+		}
+	}
+	imsStateMu.Unlock()
+
 	go func() {
 		select {
 		case <-ctx.Done():
@@ -187,6 +194,43 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 		inst.cancel()
 	}()
 	return nil
+}
+
+func reportIMSState(ctx context.Context, req StartRequest, inst *Instance, ready bool, cause error) {
+	if ctx.Err() != nil {
+		return
+	}
+	if req.ShouldRun != nil && !req.ShouldRun() {
+		inst.cancel()
+		return
+	}
+	recovering := cause == nil || errors.Is(cause, ims.ErrRecovering)
+	inst.update(func(state *State) {
+		if ctx.Err() != nil || !state.TunnelReady {
+			return
+		}
+		state.IMSReady, state.SMSReady = ready, ready
+		if ready {
+			state.Phase = PhaseReady
+			state.LastReason = PhaseSMSReady
+			state.LastError, state.LastErrorClass = "", ""
+		} else if recovering {
+			state.Phase = PhaseIMSRegistering
+			state.LastReason = "ims_recovering"
+			state.LastErrorClass = "ims_recovering"
+			if cause != nil {
+				state.LastError = cause.Error()
+			}
+		} else {
+			state.Phase = PhaseFailed
+			state.LastReason = "ims_disconnected"
+			state.LastErrorClass = "ims_disconnected"
+			state.LastError = cause.Error()
+		}
+	})
+	if !ready && !recovering {
+		inst.cancel()
+	}
 }
 
 func toSWUProxy(p *ProxyConfig) *swu.ProxyConfig {

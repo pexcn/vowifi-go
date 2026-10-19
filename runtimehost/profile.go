@@ -124,6 +124,19 @@ func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security 
 		cfg.KeepAlive = time.Duration(params.IMSTCPKeepaliveSeconds) * time.Second
 	}
 	template := params.IMSRegisterTemplate
+	policy := template.RegisterPolicy
+	if policy.TemporaryStatusCodes != nil {
+		cfg.TemporaryStatusCodes = append([]int{}, policy.TemporaryStatusCodes...)
+	}
+	if policy.ForbiddenStatusCodes != nil {
+		cfg.ForbiddenStatusCodes = append([]int{}, policy.ForbiddenStatusCodes...)
+	}
+	if policy.TemporaryRetrySeconds > 0 {
+		if uint64(policy.TemporaryRetrySeconds) > uint64((1<<63-1)/time.Second) {
+			return errors.New("invalid IMS retry interval")
+		}
+		cfg.RecoveryInitial = time.Duration(policy.TemporaryRetrySeconds) * time.Second
+	}
 	if template.UsePlainDigestPlaceholder != nil {
 		cfg.UsePlainDigestPlaceholder = *template.UsePlainDigestPlaceholder
 	}
