@@ -849,7 +849,7 @@ func TestRequestedIPFamiliesAndNATKeepalive(t *testing.T) {
 	}
 }
 
-func TestRekeyRequestExplicitlyClosesSession(t *testing.T) {
+func TestMalformedCreateChildRequestKeepsSession(t *testing.T) {
 	p := newMockPeer(t, "")
 	p.start()
 	s, err := Start(context.Background(), p.cfg)
@@ -879,17 +879,16 @@ func TestRekeyRequestExplicitlyClosesSession(t *testing.T) {
 		t.Fatal(err)
 	}
 	kind, _, err := ikev2.ParseNotification(n)
-	if err != nil || kind != 17 {
+	if err != nil || kind != 7 {
 		t.Fatalf("rekey rejection: %d %v", kind, err)
 	}
 	select {
 	case <-s.Done():
-	case <-time.After(time.Second):
-		t.Fatal("unsupported rekey left tunnel active")
-	}
-	if !errors.Is(s.Err(), ErrRekeyRequired) || !p.transport.closed.Load() {
 		t.Fatal(s.Err())
+	default:
 	}
+	sendTunnelPacket(t, p, p.toClient)
+	receiveTunnelPacket(t, s)
 }
 
 // This SOCKS proxy performs real authenticated UDP ASSOCIATE and forwards both

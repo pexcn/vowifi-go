@@ -24,7 +24,7 @@ import (
 	"time"
 )
 
-var ErrRekeyRequired = errors.New("SWu SA lifetime exhausted; reconnect required (rekey not implemented)")
+var ErrRekeyRequired = errors.New("SWu SA cannot be renewed; reconnect required")
 
 type Config struct {
 	// EAPOnlyAuthentication offers RFC 5998 in the first IKE_AUTH request.
@@ -91,12 +91,19 @@ type Session struct {
 	lastPeerID                                         uint32
 	havePeerID                                         bool
 	lastPeerReply                                      []byte
+	lastPeerRequest                                    []byte
 	ikeMu                                              sync.Mutex
 	encapsulated                                       bool
 	initialPeers                                       map[string]bool
 	ikeProfiles                                        []IKEProfile
 	keyExchangeGroup                                   uint16
 	keRetries                                          int
+	// childMu spans outbound writes to serialize them with SA replacement.
+	childMu         sync.RWMutex
+	retiredChildren map[uint32]retiredChild
+	childCreated    time.Time
+	childReset      chan struct{}
+	rekeyMu         sync.Mutex
 }
 
 func Start(ctx context.Context, c Config) (*Session, error) {
@@ -172,6 +179,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	if c.Random == nil {
 		c.Random = rand.Reader
 	}
+	c.Random = &lockedRandom{reader: c.Random}
 	if c.DHGroup == 0 {
 		c.DHGroup = 14
 	}
@@ -190,7 +198,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		c.ServerName = host
 	}
 	childCtx, cancel := context.WithCancel(ctx)
-	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
+	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), childReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
 	s.ikeProfiles, s.keyExchangeGroup = profiles, c.DHGroup
 	_, port, _ := net.SplitHostPort(remote)
 	s.encapsulated = port == "4500"
@@ -247,6 +255,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	}
 	go s.readLoop()
 	go s.maintain()
+	go s.keepaliveLoop()
 	return s, nil
 }
 func Dial(ctx context.Context, c Config) (*Session, error) { return Start(ctx, c) }
@@ -310,6 +319,12 @@ func (s *Session) WritePacket(ctx context.Context, p []byte) error {
 	}
 	if !s.permitted(p, true) {
 		return errors.New("inner packet outside negotiated traffic selectors")
+	}
+	s.childMu.RLock()
+	defer s.childMu.RUnlock()
+	if !time.Now().Before(s.childCreated.Add(s.cfg.ChildLifetime)) {
+		s.fail(ErrRekeyRequired)
+		return ErrRekeyRequired
 	}
 	packet, e := s.out.Seal(p, next)
 	if e != nil {
@@ -863,6 +878,7 @@ func (s *Session) establishChild(ps []ikev2.Payload) error {
 		return e
 	}
 	s.configuration = configuration
+	s.childCreated = time.Now()
 	return nil
 }
 
