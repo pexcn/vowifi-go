@@ -3,6 +3,8 @@ package swu
 import (
 	"bytes"
 	"context"
+	"crypto/aes"
+	"crypto/cipher"
 	"crypto/ecdsa"
 	"crypto/elliptic"
 	"crypto/rand"
@@ -320,6 +322,28 @@ func (p *mockPeer) handshake() error {
 			return e
 		}
 	}
+	if strings.Contains(p.mode, "encrypted-identity") {
+		packet, err := eap.Parse(challenge)
+		if err != nil {
+			return err
+		}
+		// AT_NEXT_PSEUDONYM("test") followed by an eight-byte AT_PADDING.
+		plain := []byte{132, 2, 0, 4, 't', 'e', 's', 't', 6, 2, 0, 0, 0, 0, 0, 0}
+		iv := bytes.Repeat([]byte{0x42}, 16)
+		block, err := aes.NewCipher(p.aka.KEncr)
+		if err != nil {
+			return err
+		}
+		ciphertext := make([]byte, len(plain))
+		cipher.NewCBCEncrypter(block, iv).CryptBlocks(ciphertext, plain)
+		packet.Attributes = append(packet.Attributes,
+			eap.Attribute{Type: eap.ATIV, Value: append([]byte{0, 0}, iv...)},
+			eap.Attribute{Type: eap.ATEncrData, Value: append([]byte{0, 0}, ciphertext...)})
+		challenge, e = eap.Sign(p.aka.KAut, packet)
+		if e != nil {
+			return e
+		}
+	}
 	ps := []ikev2.Payload{{Type: ikev2.IDr, Data: p.peerID}, {Type: ikev2.CERT, Data: append([]byte{4}, p.cert...)}, {Type: ikev2.AUTH, Data: auth}, {Type: ikev2.EAP, Data: challenge}}
 	if strings.HasPrefix(p.mode, "eap-only") {
 		ps = []ikev2.Payload{{Type: ikev2.IDr, Data: p.peerID}, {Type: ikev2.EAP, Data: challenge}}
@@ -331,7 +355,7 @@ func (p *mockPeer) handshake() error {
 		ps = append(ps[:2], ps[3:]...)
 	case "premature-success":
 		ps[3].Data = []byte{eap.Success, 7, 0, 4}
-	case "eap-only-bad-mac":
+	case "eap-only-bad-mac", "eap-only-encrypted-identity-bad-mac":
 		ps[1].Data[len(challenge)-1] ^= 1
 	case "eap-only-premature-success":
 		ps[1].Data = []byte{eap.Success, 7, 0, 4}
@@ -367,7 +391,7 @@ func (p *mockPeer) handshake() error {
 	}
 	switch p.mode {
 	case "bad-cert", "bad-signature", "missing-auth", "premature-success",
-		"eap-only-bad-mac", "eap-only-premature-success", "eap-only-unsupported",
+		"eap-only-bad-mac", "eap-only-encrypted-identity-bad-mac", "eap-only-premature-success", "eap-only-unsupported",
 		"eap-only-missing-id", "eap-only-duplicate-id":
 		return nil
 	}
@@ -642,11 +666,11 @@ func TestRealUDPCookieAKAChildESPAndDPD(t *testing.T) {
 	}
 }
 func TestEAPOnlyMutualAKAAndChildESP(t *testing.T) {
-	for _, mode := range []string{"eap-only", "eap-only-identity", "certificate-fallback", "eap-only-cp-reserved", "eap-only-cp-tv", "eap-only-cp-empty-optional"} {
+	for _, mode := range []string{"eap-only", "eap-only-identity", "certificate-fallback", "eap-only-cp-reserved", "eap-only-cp-tv", "eap-only-cp-empty-optional", "eap-only-encrypted-identity", "certificate-fallback-encrypted-identity"} {
 		t.Run(mode, func(t *testing.T) {
 			p := newMockPeer(t, mode)
 			p.cfg.EAPOnlyAuthentication = true
-			if mode != "certificate-fallback" {
+			if strings.HasPrefix(mode, "eap-only") {
 				p.cfg.Roots = nil // No certificate was sent or trusted on this path.
 			}
 			p.start()
@@ -719,6 +743,7 @@ func TestConfigurationFailuresCloseTransport(t *testing.T) {
 func TestEAPOnlyAuthenticationFailuresCloseTransport(t *testing.T) {
 	for _, tc := range []struct{ mode, errorText string }{
 		{"eap-only-bad-mac", "MAC verification failed"},
+		{"eap-only-encrypted-identity-bad-mac", "MAC verification failed"},
 		{"eap-only-premature-success", "premature EAP success"},
 		{"eap-only-unsupported", "unsupported EAP method"},
 		{"eap-only-missing-id", "expected one payload"},

@@ -37,6 +37,8 @@ const (
 	ATMAC          byte = 11
 	ATIdentity     byte = 14
 	ATNotification byte = 12
+	ATIV           byte = 129
+	ATEncrData     byte = 130
 	ATCheckcode    byte = 134
 )
 
@@ -111,7 +113,7 @@ func Parse(b []byte) (Packet, error) {
 			if n != 4 && n != 24 {
 				return p, errors.New("invalid AT_CHECKCODE length")
 			}
-		case ATIdentity, 129, 130, 132, 133:
+		case ATIdentity, ATIV, ATEncrData, 132, 133:
 		default:
 			if a[0] < 128 {
 				return p, fmt.Errorf("unknown mandatory AKA attribute %d", a[0])
@@ -454,12 +456,19 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 		if c.ChallengeMode == "checkcode" || c.ChallengeMode != "omit" && hasCheckcode {
 			reply.Attributes = append(reply.Attributes, Attribute{ATCheckcode, append([]byte{0, 0}, c.checkcode()...)})
 		}
-		if _, ok = p.Get(129); ok {
-			return nil, false, errors.New("encrypted AKA attributes not supported")
+		iv, hasIV := p.Get(ATIV)
+		encrypted, hasEncrypted := p.Get(ATEncrData)
+		if hasIV != hasEncrypted {
+			return nil, false, errors.New("AKA AT_IV and AT_ENCR_DATA must occur together")
 		}
-		if _, ok = p.Get(130); ok {
-			return nil, false, errors.New("encrypted AKA attributes not supported")
+		if hasIV && (len(iv) != 18 || len(encrypted) < 18 || (len(encrypted)-2)%16 != 0) {
+			return nil, false, errors.New("invalid AKA encrypted identity attribute length")
 		}
+		// RFC 4187 4.1.1.8 permits ignoring optional encrypted identities and
+		// continuing with the permanent identity. Match the original full-AKA
+		// path: authenticate the entire request above, but do not adopt a
+		// pseudonym or fast-reauth identity until their lifecycles are supported.
+		// The two reserved bytes in IV/encrypted data are ignored (10.12).
 		if _, ok = p.Get(135); ok {
 			c.protectedResult = true
 			reply.Attributes = append(reply.Attributes, Attribute{135, []byte{0, 0}})
