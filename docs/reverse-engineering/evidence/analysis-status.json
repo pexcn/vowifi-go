@@ -1,0 +1,162 @@
+{
+  "format": "vohive-local-analysis-status-v1",
+  "target_sha256": "2b080980c72fede3dbad1c9f8830bb51d0bc368b4acb576c4f2d27f9182eb59f",
+  "rea_function_evidence_count": 0,
+  "rea_metadata_evidence_id": "ev_7659ee49f6b7c4e0ebfc4c8209c712279efcb3e27b4517ca9b95277b306dc26f",
+  "historical_guide_evidence_id": "ev_a6ab88c8998c88efbbf8976c523fd92d67dd357bdb46891dd117d970dfafe7c0",
+  "historical_guide_evidence_revalidated": false,
+  "prior_calls": [
+    {
+      "request_file": "001-open.json",
+      "status": "success"
+    },
+    {
+      "request_file": "002-session.json",
+      "status": "success"
+    },
+    {
+      "request_file": "003-auth.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "004-eap.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "005-final.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "006-plan.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "007-carrier.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "020-global-defaults.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "021-preset-loader.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "022-resolve.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "023-merge-preset.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "024-merge-override.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "025-blockedmcc.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "026-allow-missing-auth.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "027-policy-init.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "028-plmn3.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "029-imei-selection.json",
+      "status": "error",
+      "code": "execution_failure"
+    },
+    {
+      "request_file": "030-default-register.json",
+      "status": "error",
+      "code": "execution_failure"
+    }
+  ],
+  "resume_calls": [
+    {
+      "request_file": "001-open.json",
+      "status": "error",
+      "code": "cleanup_incomplete"
+    },
+    {
+      "request_file": "002-metadata.json",
+      "status": "success",
+      "evidence_id": "ev_7659ee49f6b7c4e0ebfc4c8209c712279efcb3e27b4517ca9b95277b306dc26f"
+    },
+    {
+      "request_file": "003-missing-auth.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "004-auth-callback.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "005-verify-auth.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "006-global-defaults.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "007-default-register.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "008-ts43-parse.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "009-ts43-auth.json",
+      "status": "error",
+      "code": "target_unavailable"
+    },
+    {
+      "request_file": "010-evidence.json",
+      "status": "success"
+    },
+    {
+      "request_file": "011-close.json",
+      "status": "error",
+      "code": "cleanup_incomplete"
+    }
+  ],
+  "target_executed": false,
+  "carrier_network_contacted": false,
+  "limitations": [
+    "Go1.26.3 untested / missing bootstrap types in Ghidra12.1.4",
+    "Prior Ghidra auto-analysis completed but local Unix socket bind was denied",
+    "Resume readiness/close failed process ownership observation: environment_errno_EACCES",
+    "No successful function pseudocode Evidence records; local objdump/ELF observations are not REA records"
+  ]
+}

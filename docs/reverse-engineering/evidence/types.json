@@ -1,0 +1,3118 @@
+[
+  {
+    "name": "*carrier.EffectiveCarrierConfig",
+    "va": "0x1ba1da0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "MCC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "MNC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "PresetID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "MatchedTemplate",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      },
+      {
+        "name": "E911",
+        "type": "carrier.E911Policy",
+        "type_va": "0x1faacc0",
+        "offset": 64,
+        "size": 56
+      },
+      {
+        "name": "IPStackType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 120,
+        "size": 16
+      },
+      {
+        "name": "EPDGAddr",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 136,
+        "size": 16
+      },
+      {
+        "name": "EPDGAddrSource",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 152,
+        "size": 16
+      },
+      {
+        "name": "EPDGPort",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 168,
+        "size": 2
+      },
+      {
+        "name": "APN",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 176,
+        "size": 16
+      },
+      {
+        "name": "DNSServer",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 192,
+        "size": 16
+      },
+      {
+        "name": "NATKeepaliveSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "name": "DPDIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 216,
+        "size": 8
+      },
+      {
+        "name": "AKAChallengeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 224,
+        "size": 16
+      },
+      {
+        "name": "IKEIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 240,
+        "size": 16
+      },
+      {
+        "name": "AKAIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 256,
+        "size": 16
+      },
+      {
+        "name": "IKEProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 272,
+        "size": 24
+      },
+      {
+        "name": "ESPProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 296,
+        "size": 24
+      },
+      {
+        "name": "EnableLegacyCiphers",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 320,
+        "size": 1
+      },
+      {
+        "name": "AllowedLegacyCiphers",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 328,
+        "size": 24
+      },
+      {
+        "name": "AlgorithmPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 352,
+        "size": 16
+      },
+      {
+        "name": "DeviceIdentityIMEI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 368,
+        "size": 16
+      },
+      {
+        "name": "DeviceIdentityEnabled",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 384,
+        "size": 1
+      },
+      {
+        "name": "DeviceModel",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 392,
+        "size": 16
+      },
+      {
+        "name": "IMSDomain",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 408,
+        "size": 16
+      },
+      {
+        "name": "IMSRealm",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 424,
+        "size": 16
+      },
+      {
+        "name": "IMSRegistrar",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 440,
+        "size": 16
+      },
+      {
+        "name": "IMSPCSCF",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 456,
+        "size": 16
+      },
+      {
+        "name": "IMSUserAgent",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 472,
+        "size": 16
+      },
+      {
+        "name": "IMSTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 488,
+        "size": 16
+      },
+      {
+        "name": "IMSIdentitySource",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 504,
+        "size": 16
+      },
+      {
+        "name": "IMSLocalPort",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 520,
+        "size": 8
+      },
+      {
+        "name": "IMSTCPKeepaliveSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 528,
+        "size": 8
+      },
+      {
+        "name": "IMSOptionsPingIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 536,
+        "size": 8
+      },
+      {
+        "name": "DPDKeepaliveIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 544,
+        "size": 8
+      },
+      {
+        "name": "ReauthIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 552,
+        "size": 8
+      },
+      {
+        "name": "IMSRegisterTemplate",
+        "type": "carrier.IMSRegisterTemplate",
+        "type_va": "0x2155560",
+        "offset": 560,
+        "size": 392
+      },
+      {
+        "name": "IMSRegisterPolicySource",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 952,
+        "size": 16
+      },
+      {
+        "name": "SMSRoutingMethod",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 968,
+        "size": 16
+      },
+      {
+        "name": "SMSRoutingGW",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 984,
+        "size": 16
+      },
+      {
+        "name": "ForceSMSCAuth",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 1000,
+        "size": 1
+      }
+    ],
+    "struct_va": "0x2178d60"
+  },
+  {
+    "name": "*carrier.IMSRegisterPolicy",
+    "va": "0x1ba1d20",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "TemporaryStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 16,
+        "size": 24
+      },
+      {
+        "name": "ForbiddenStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 40,
+        "size": 24
+      },
+      {
+        "name": "InitialRejectFallbackStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 64,
+        "size": 24
+      },
+      {
+        "name": "TemporaryRetrySeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 88,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x1feb500"
+  },
+  {
+    "name": "*carrier.IMSRegisterTemplate",
+    "va": "0x1ba1d60",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "UsePlainDigestPlaceholder",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 16,
+        "size": 1
+      },
+      {
+        "name": "Expires",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "SMSReceiverTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "ContactMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      },
+      {
+        "name": "FixedPANI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 64,
+        "size": 16
+      },
+      {
+        "name": "SupportedHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 80,
+        "size": 16
+      },
+      {
+        "name": "AllowHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 96,
+        "size": 16
+      },
+      {
+        "name": "AccessType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 112,
+        "size": 16
+      },
+      {
+        "name": "ICSIRef",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 128,
+        "size": 16
+      },
+      {
+        "name": "ContactParamOrder",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 144,
+        "size": 24
+      },
+      {
+        "name": "VoiceSupportedHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 168,
+        "size": 16
+      },
+      {
+        "name": "VoiceAllowHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 184,
+        "size": 16
+      },
+      {
+        "name": "VoiceAcceptContact",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 200,
+        "size": 16
+      },
+      {
+        "name": "VoicePPreferredService",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 216,
+        "size": 16
+      },
+      {
+        "name": "ForceHeaderPort5060",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 232,
+        "size": 1
+      },
+      {
+        "name": "IncludePANIAuthenticated",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 233,
+        "size": 1
+      },
+      {
+        "name": "IncludeConnectionKeepaliveInAuth",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 234,
+        "size": 1
+      },
+      {
+        "name": "SecAgreeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 240,
+        "size": 16
+      },
+      {
+        "name": "SecurityClientIncludesServerParams",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 256,
+        "size": 1
+      },
+      {
+        "name": "SecurityClientMechanisms",
+        "type": "[]carrier.IPSec3GPPSecurityMechanism",
+        "type_va": "0x1c1f980",
+        "offset": 264,
+        "size": 24
+      },
+      {
+        "name": "StrictSecurityServerOffer",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 288,
+        "size": 1
+      },
+      {
+        "name": "EnableInitialRejectFallback",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 289,
+        "size": 1
+      },
+      {
+        "name": "FallbackIncludesServerParamsInSecCl",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 290,
+        "size": 1
+      },
+      {
+        "name": "RegisterPolicy",
+        "type": "carrier.IMSRegisterPolicy",
+        "type_va": "0x1feb500",
+        "offset": 296,
+        "size": 96
+      }
+    ],
+    "struct_va": "0x2155560"
+  },
+  {
+    "name": "*carrier.IPSec3GPPSecurityMechanism",
+    "va": "0x1ba1ce0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Alg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "EAlg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "Prot",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "Mode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1faac00"
+  },
+  {
+    "name": "*policy.CarrierMetadataPlan",
+    "va": "0x1bb3720",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "MCC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "MNC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "PresetID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "MatchedTemplate",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1fb2100"
+  },
+  {
+    "name": "*policy.CarrierOverride",
+    "va": "0x1bb3460",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "E911",
+        "type": "policy.E911PolicyOverride",
+        "type_va": "0x1fb1ec0",
+        "offset": 16,
+        "size": 56
+      },
+      {
+        "name": "CustomEPDG",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 72,
+        "size": 16
+      },
+      {
+        "name": "EPDGPort",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 88,
+        "size": 8
+      },
+      {
+        "name": "APN",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 96,
+        "size": 16
+      },
+      {
+        "name": "IPStackType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 112,
+        "size": 16
+      },
+      {
+        "name": "DNSServer",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 128,
+        "size": 16
+      },
+      {
+        "name": "AlgorithmPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 144,
+        "size": 16
+      },
+      {
+        "name": "DeviceModel",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 160,
+        "size": 16
+      },
+      {
+        "name": "AKAChallengeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 176,
+        "size": 16
+      },
+      {
+        "name": "IKEIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 192,
+        "size": 16
+      },
+      {
+        "name": "AKAIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 208,
+        "size": 16
+      },
+      {
+        "name": "DeviceIdentityEnabled",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 224,
+        "size": 8
+      },
+      {
+        "name": "DeviceIdentityIMEI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 232,
+        "size": 16
+      },
+      {
+        "name": "NATKeepaliveSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 248,
+        "size": 8
+      },
+      {
+        "name": "DPDIntervalSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 256,
+        "size": 8
+      },
+      {
+        "name": "EnableLegacyCiphers",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 264,
+        "size": 8
+      },
+      {
+        "name": "AllowedLegacyCiphers",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 272,
+        "size": 24
+      },
+      {
+        "name": "IKEProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 296,
+        "size": 24
+      },
+      {
+        "name": "ESPProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 320,
+        "size": 24
+      },
+      {
+        "name": "IMSDomain",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 344,
+        "size": 16
+      },
+      {
+        "name": "IMSRealm",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 360,
+        "size": 16
+      },
+      {
+        "name": "IMSRegistrar",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 376,
+        "size": 16
+      },
+      {
+        "name": "IMSPCSCF",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 392,
+        "size": 16
+      },
+      {
+        "name": "IMSUserAgent",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 408,
+        "size": 16
+      },
+      {
+        "name": "IMSTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 424,
+        "size": 16
+      },
+      {
+        "name": "IMSIdentitySource",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 440,
+        "size": 16
+      },
+      {
+        "name": "IMSLocalPort",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 456,
+        "size": 8
+      },
+      {
+        "name": "IMSTCPKeepaliveSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 464,
+        "size": 8
+      },
+      {
+        "name": "IMSOptionsPingIntervalSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 472,
+        "size": 8
+      },
+      {
+        "name": "DPDKeepaliveIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 480,
+        "size": 8
+      },
+      {
+        "name": "ReauthIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 488,
+        "size": 8
+      },
+      {
+        "name": "IMSRegisterTemplate",
+        "type": "policy.IMSRegisterTemplateOverride",
+        "type_va": "0x2146340",
+        "offset": 496,
+        "size": 312
+      },
+      {
+        "name": "SMSRoutingMethod",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 808,
+        "size": 16
+      },
+      {
+        "name": "SMSRoutingGW",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 824,
+        "size": 16
+      },
+      {
+        "name": "ForceSMSCAuth",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 840,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x2172880"
+  },
+  {
+    "name": "*policy.CarrierPlan",
+    "va": "0x1cf4100",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Metadata",
+        "type": "policy.CarrierMetadataPlan",
+        "type_va": "0x1fb2100",
+        "offset": 0,
+        "size": 64
+      },
+      {
+        "name": "E911",
+        "type": "policy.E911Plan",
+        "type_va": "0x1fb21c0",
+        "offset": 64,
+        "size": 56
+      },
+      {
+        "name": "EPDG",
+        "type": "policy.EPDGPlan",
+        "type_va": "0x201c640",
+        "offset": 120,
+        "size": 88
+      },
+      {
+        "name": "IKE",
+        "type": "policy.IKEPlan",
+        "type_va": "0x2108320",
+        "offset": 208,
+        "size": 176
+      },
+      {
+        "name": "IMS",
+        "type": "policy.IMSPlan",
+        "type_va": "0x21084a0",
+        "offset": 384,
+        "size": 544
+      },
+      {
+        "name": "SMS",
+        "type": "policy.SMSPlan",
+        "type_va": "0x1f0ff40",
+        "offset": 928,
+        "size": 40
+      },
+      {
+        "name": "Device",
+        "type": "policy.DeviceIdentityPlan",
+        "type_va": "0x1f10000",
+        "offset": 968,
+        "size": 40
+      }
+    ],
+    "struct_va": "0x20b05c0"
+  },
+  {
+    "name": "*policy.CarrierPreset",
+    "va": "0x1bb35a0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "MCC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "MNC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "E911",
+        "type": "policy.E911Policy",
+        "type_va": "0x1fb2040",
+        "offset": 48,
+        "size": 56
+      },
+      {
+        "name": "CustomEPDG",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 104,
+        "size": 16
+      },
+      {
+        "name": "EPDGPort",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "name": "APN",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 128,
+        "size": 16
+      },
+      {
+        "name": "DNSServer",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 144,
+        "size": 16
+      },
+      {
+        "name": "AlgorithmPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 160,
+        "size": 16
+      },
+      {
+        "name": "DeviceModel",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 176,
+        "size": 16
+      },
+      {
+        "name": "AKAChallengeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 192,
+        "size": 16
+      },
+      {
+        "name": "IKEIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 208,
+        "size": 16
+      },
+      {
+        "name": "AKAIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 224,
+        "size": 16
+      },
+      {
+        "name": "DeviceIdentityIMEI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 240,
+        "size": 16
+      },
+      {
+        "name": "DeviceIdentityEnabled",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 256,
+        "size": 8
+      },
+      {
+        "name": "NATKeepaliveSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 264,
+        "size": 8
+      },
+      {
+        "name": "DPDIntervalSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 272,
+        "size": 8
+      },
+      {
+        "name": "EnableLegacyCiphers",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 280,
+        "size": 8
+      },
+      {
+        "name": "AllowedLegacyCiphers",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 288,
+        "size": 24
+      },
+      {
+        "name": "IKEProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 312,
+        "size": 24
+      },
+      {
+        "name": "ESPProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 336,
+        "size": 24
+      },
+      {
+        "name": "IMSDomain",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 360,
+        "size": 16
+      },
+      {
+        "name": "IMSRealm",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 376,
+        "size": 16
+      },
+      {
+        "name": "IMSRegistrar",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 392,
+        "size": 16
+      },
+      {
+        "name": "IMSPCSCF",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 408,
+        "size": 16
+      },
+      {
+        "name": "IMSUserAgent",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 424,
+        "size": 16
+      },
+      {
+        "name": "IMSTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 440,
+        "size": 16
+      },
+      {
+        "name": "IMSIdentitySource",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 456,
+        "size": 16
+      },
+      {
+        "name": "IMSLocalPort",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 472,
+        "size": 8
+      },
+      {
+        "name": "IMSTCPKeepaliveSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 480,
+        "size": 8
+      },
+      {
+        "name": "IMSOptionsPingIntervalSeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 488,
+        "size": 8
+      },
+      {
+        "name": "DPDKeepaliveIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 496,
+        "size": 8
+      },
+      {
+        "name": "ReauthIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 504,
+        "size": 8
+      },
+      {
+        "name": "IMSRegisterTemplate",
+        "type": "policy.IMSRegisterTemplate",
+        "type_va": "0x2155da0",
+        "offset": 512,
+        "size": 392
+      },
+      {
+        "name": "IPStackType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 904,
+        "size": 16
+      },
+      {
+        "name": "SMSRoutingMethod",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 920,
+        "size": 16
+      },
+      {
+        "name": "SMSRoutingGW",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 936,
+        "size": 16
+      },
+      {
+        "name": "ForceSMSCAuth",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 952,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x2174360"
+  },
+  {
+    "name": "*policy.E911Plan",
+    "va": "0x1bb3760",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Enabled",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "name": "Provider",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 8,
+        "size": 16
+      },
+      {
+        "name": "EntitlementURL",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 24,
+        "size": 16
+      },
+      {
+        "name": "WebsheetHostPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 40,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1fb21c0"
+  },
+  {
+    "name": "*policy.E911Policy",
+    "va": "0x1bb35e0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Enabled",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "name": "Provider",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 8,
+        "size": 16
+      },
+      {
+        "name": "EntitlementURL",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 24,
+        "size": 16
+      },
+      {
+        "name": "WebsheetHostPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 40,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1fb2040"
+  },
+  {
+    "name": "*policy.E911PolicyOverride",
+    "va": "0x1bb34a0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Enabled",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "Provider",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 8,
+        "size": 16
+      },
+      {
+        "name": "EntitlementURL",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 24,
+        "size": 16
+      },
+      {
+        "name": "WebsheetHostPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 40,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1fb1ec0"
+  },
+  {
+    "name": "*policy.IMSRegisterPolicy",
+    "va": "0x1bb3660",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "TemporaryStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 16,
+        "size": 24
+      },
+      {
+        "name": "ForbiddenStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 40,
+        "size": 24
+      },
+      {
+        "name": "InitialRejectFallbackStatusCodes",
+        "type": "[]int",
+        "type_va": "0x1c204c0",
+        "offset": 64,
+        "size": 24
+      },
+      {
+        "name": "TemporaryRetrySeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 88,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x1ff0ac0"
+  },
+  {
+    "name": "*policy.IMSRegisterPolicyOverride",
+    "va": "0x1bb3560",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "TemporaryStatusCodes",
+        "type": "*[]int",
+        "type_va": "0x1c20500",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "ForbiddenStatusCodes",
+        "type": "*[]int",
+        "type_va": "0x1c20500",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "InitialRejectFallbackStatusCodes",
+        "type": "*[]int",
+        "type_va": "0x1c20500",
+        "offset": 32,
+        "size": 8
+      },
+      {
+        "name": "TemporaryRetrySeconds",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 40,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x1ff09e0"
+  },
+  {
+    "name": "*policy.IMSRegisterTemplate",
+    "va": "0x1bb3620",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "UsePlainDigestPlaceholder",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 16,
+        "size": 1
+      },
+      {
+        "name": "Expires",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "SMSReceiverTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "ContactMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      },
+      {
+        "name": "FixedPANI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 64,
+        "size": 16
+      },
+      {
+        "name": "SupportedHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 80,
+        "size": 16
+      },
+      {
+        "name": "AllowHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 96,
+        "size": 16
+      },
+      {
+        "name": "AccessType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 112,
+        "size": 16
+      },
+      {
+        "name": "ICSIRef",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 128,
+        "size": 16
+      },
+      {
+        "name": "ContactParamOrder",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 144,
+        "size": 24
+      },
+      {
+        "name": "VoiceSupportedHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 168,
+        "size": 16
+      },
+      {
+        "name": "VoiceAllowHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 184,
+        "size": 16
+      },
+      {
+        "name": "VoiceAcceptContact",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 200,
+        "size": 16
+      },
+      {
+        "name": "VoicePPreferredService",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 216,
+        "size": 16
+      },
+      {
+        "name": "ForceHeaderPort5060",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 232,
+        "size": 1
+      },
+      {
+        "name": "IncludePANIAuthenticated",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 233,
+        "size": 1
+      },
+      {
+        "name": "IncludeConnectionKeepaliveInAuth",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 234,
+        "size": 1
+      },
+      {
+        "name": "SecAgreeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 240,
+        "size": 16
+      },
+      {
+        "name": "SecurityClientIncludesServerParams",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 256,
+        "size": 1
+      },
+      {
+        "name": "SecurityClientMechanisms",
+        "type": "[]policy.IPSec3GPPSecurityMechanism",
+        "type_va": "0x1c1f940",
+        "offset": 264,
+        "size": 24
+      },
+      {
+        "name": "StrictSecurityServerOffer",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 288,
+        "size": 1
+      },
+      {
+        "name": "EnableInitialRejectFallback",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 289,
+        "size": 1
+      },
+      {
+        "name": "FallbackIncludesServerParamsInSecCl",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 290,
+        "size": 1
+      },
+      {
+        "name": "RegisterPolicy",
+        "type": "policy.IMSRegisterPolicy",
+        "type_va": "0x1ff0ac0",
+        "offset": 296,
+        "size": 96
+      }
+    ],
+    "struct_va": "0x2155da0"
+  },
+  {
+    "name": "*policy.IMSRegisterTemplateOverride",
+    "va": "0x1bb34e0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "ID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "UsePlainDigestPlaceholder",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 16,
+        "size": 8
+      },
+      {
+        "name": "Expires",
+        "type": "*int",
+        "type_va": "0x1ba2de0",
+        "offset": 24,
+        "size": 8
+      },
+      {
+        "name": "SMSReceiverTransport",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "ContactMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      },
+      {
+        "name": "FixedPANI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 64,
+        "size": 16
+      },
+      {
+        "name": "SupportedHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 80,
+        "size": 16
+      },
+      {
+        "name": "AllowHeader",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 96,
+        "size": 16
+      },
+      {
+        "name": "AccessType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 112,
+        "size": 16
+      },
+      {
+        "name": "ICSIRef",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 128,
+        "size": 16
+      },
+      {
+        "name": "ContactParamOrder",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 144,
+        "size": 24
+      },
+      {
+        "name": "ForceHeaderPort5060",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 168,
+        "size": 8
+      },
+      {
+        "name": "IncludePANIAuthenticated",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 176,
+        "size": 8
+      },
+      {
+        "name": "IncludeConnectionKeepaliveInAuth",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 184,
+        "size": 8
+      },
+      {
+        "name": "SecAgreeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 192,
+        "size": 16
+      },
+      {
+        "name": "SecurityClientIncludesServerParams",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "name": "SecurityClientMechanisms",
+        "type": "[]policy.IPSec3GPPSecurityMechanism",
+        "type_va": "0x1c1f940",
+        "offset": 216,
+        "size": 24
+      },
+      {
+        "name": "StrictSecurityServerOffer",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 240,
+        "size": 8
+      },
+      {
+        "name": "EnableInitialRejectFallback",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 248,
+        "size": 8
+      },
+      {
+        "name": "FallbackIncludesServerParamsInSecCl",
+        "type": "*bool",
+        "type_va": "0x1ba2fa0",
+        "offset": 256,
+        "size": 8
+      },
+      {
+        "name": "RegisterPolicy",
+        "type": "policy.IMSRegisterPolicyOverride",
+        "type_va": "0x1ff09e0",
+        "offset": 264,
+        "size": 48
+      }
+    ],
+    "struct_va": "0x2146340"
+  },
+  {
+    "name": "*policy.IPSec3GPPSecurityMechanism",
+    "va": "0x1bb3520",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Alg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "EAlg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "Prot",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 32,
+        "size": 16
+      },
+      {
+        "name": "Mode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 48,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x1fb1f80"
+  },
+  {
+    "name": "*policy.embeddedCarrierPresetFile",
+    "va": "0x1bb36e0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "MCC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "MNC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "CarrierOverride",
+        "type": "policy.CarrierOverride",
+        "type_va": "0x2172880",
+        "offset": 32,
+        "size": 848
+      }
+    ],
+    "struct_va": "0x1f0fe80"
+  },
+  {
+    "name": "*swu.Config",
+    "va": "0x1badee0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "DeviceID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 0,
+        "size": 16
+      },
+      {
+        "name": "EpDGAddr",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 16,
+        "size": 16
+      },
+      {
+        "name": "EpDGPort",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 32,
+        "size": 2
+      },
+      {
+        "name": "APN",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 40,
+        "size": 16
+      },
+      {
+        "name": "LocalAddr",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 56,
+        "size": 16
+      },
+      {
+        "name": "DNSServer",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 72,
+        "size": 16
+      },
+      {
+        "name": "SIM",
+        "type": "sim.AKAProvider",
+        "type_va": "0x1d5cf20",
+        "offset": 88,
+        "size": 16
+      },
+      {
+        "name": "EnableDriver",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 104,
+        "size": 1
+      },
+      {
+        "name": "DataplaneMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 112,
+        "size": 16
+      },
+      {
+        "name": "XFRMIfID",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 128,
+        "size": 4
+      },
+      {
+        "name": "MCC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 136,
+        "size": 16
+      },
+      {
+        "name": "MNC",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 152,
+        "size": 16
+      },
+      {
+        "name": "IMSI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 168,
+        "size": 16
+      },
+      {
+        "name": "IPStackType",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 184,
+        "size": 16
+      },
+      {
+        "name": "LocalPort",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 200,
+        "size": 2
+      },
+      {
+        "name": "IKERetryConfig",
+        "type": "*swu.RetryConfig",
+        "type_va": "0x1bade20",
+        "offset": 208,
+        "size": 8
+      },
+      {
+        "name": "ReauthInterval",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 216,
+        "size": 8
+      },
+      {
+        "name": "TUNName",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 224,
+        "size": 16
+      },
+      {
+        "name": "TUNMTU",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 240,
+        "size": 8
+      },
+      {
+        "name": "ReplayWindow",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 248,
+        "size": 8
+      },
+      {
+        "name": "EnableESN",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 256,
+        "size": 1
+      },
+      {
+        "name": "DisableEAPMACValidation",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 257,
+        "size": 1
+      },
+      {
+        "name": "EnableDeviceIdentitySpoof",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 258,
+        "size": 1
+      },
+      {
+        "name": "DeviceIdentityIMEI",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 264,
+        "size": 16
+      },
+      {
+        "name": "IKEIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 280,
+        "size": 16
+      },
+      {
+        "name": "AKAChallengeMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 296,
+        "size": 16
+      },
+      {
+        "name": "AKAIdentityMode",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 312,
+        "size": 16
+      },
+      {
+        "name": "NATKeepaliveSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 328,
+        "size": 8
+      },
+      {
+        "name": "DPDIntervalSeconds",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 336,
+        "size": 8
+      },
+      {
+        "name": "EnableWiresharkKeyLog",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 344,
+        "size": 1
+      },
+      {
+        "name": "WiresharkKeyLogPath",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 352,
+        "size": 16
+      },
+      {
+        "name": "ResumeTicket",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 368,
+        "size": 24
+      },
+      {
+        "name": "ResumeOldSKd",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 392,
+        "size": 24
+      },
+      {
+        "name": "OnTicketUpdate",
+        "type": "func([]uint8, []uint8)",
+        "type_va": "0x1c92e40",
+        "offset": 416,
+        "size": 8
+      },
+      {
+        "name": "FastReauthID",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 424,
+        "size": 16
+      },
+      {
+        "name": "FastReauthMK",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 440,
+        "size": 24
+      },
+      {
+        "name": "FastReauthKAut",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 464,
+        "size": 24
+      },
+      {
+        "name": "FastReauthKEncr",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 488,
+        "size": 24
+      },
+      {
+        "name": "OnFastReauthUpdate",
+        "type": "func(string, []uint8, []uint8, []uint8)",
+        "type_va": "0x1d093a0",
+        "offset": 512,
+        "size": 8
+      },
+      {
+        "name": "Socks5Addr",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 520,
+        "size": 16
+      },
+      {
+        "name": "Socks5Username",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 536,
+        "size": 16
+      },
+      {
+        "name": "Socks5Password",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 552,
+        "size": 16
+      },
+      {
+        "name": "TransportFactory",
+        "type": "func(string, string) (swu.Transport, error)",
+        "type_va": "0x1d09400",
+        "offset": 568,
+        "size": 8
+      },
+      {
+        "name": "TUNFactory",
+        "type": "func(string) (swu.TUN, error)",
+        "type_va": "0x1cd3b00",
+        "offset": 576,
+        "size": 8
+      },
+      {
+        "name": "NetTools",
+        "type": "swu.NetTools",
+        "type_va": "0x1e7ef40",
+        "offset": 584,
+        "size": 16
+      },
+      {
+        "name": "OnProgress",
+        "type": "func(string)",
+        "type_va": "0x1c65b60",
+        "offset": 600,
+        "size": 8
+      },
+      {
+        "name": "IKEProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 608,
+        "size": 24
+      },
+      {
+        "name": "ESPProposals",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 632,
+        "size": 24
+      },
+      {
+        "name": "EnableLegacyCiphers",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 656,
+        "size": 1
+      },
+      {
+        "name": "AllowedLegacyCiphers",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 664,
+        "size": 24
+      },
+      {
+        "name": "AlgorithmPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 688,
+        "size": 16
+      }
+    ],
+    "struct_va": "0x2182120"
+  },
+  {
+    "name": "*swu.Session",
+    "va": "0x2190780",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "cfg",
+        "type": "*swu.Config",
+        "type_va": "0x1badee0",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "socket",
+        "type": "swu.Transport",
+        "type_va": "0x2010c80",
+        "offset": 8,
+        "size": 16
+      },
+      {
+        "name": "tun",
+        "type": "swu.TUN",
+        "type_va": "0x1e1b4c0",
+        "offset": 24,
+        "size": 16
+      },
+      {
+        "name": "net",
+        "type": "swu.NetTools",
+        "type_va": "0x1e7ef40",
+        "offset": 40,
+        "size": 16
+      },
+      {
+        "name": "SPIi",
+        "type": "uint64",
+        "type_va": "0x1c5eae0",
+        "offset": 56,
+        "size": 8
+      },
+      {
+        "name": "SPIr",
+        "type": "uint64",
+        "type_va": "0x1c5eae0",
+        "offset": 64,
+        "size": 8
+      },
+      {
+        "name": "EncAlg",
+        "type": "crypto.Encrypter",
+        "type_va": "0x1e61660",
+        "offset": 72,
+        "size": 16
+      },
+      {
+        "name": "IntegAlg",
+        "type": "crypto.IntegrityAlgorithm",
+        "type_va": "0x1e1c9c0",
+        "offset": 88,
+        "size": 16
+      },
+      {
+        "name": "PRFAlg",
+        "type": "crypto.PRF",
+        "type_va": "0x1d89d20",
+        "offset": 104,
+        "size": 16
+      },
+      {
+        "name": "DH",
+        "type": "*crypto.DiffieHellman",
+        "type_va": "0x1db7ee0",
+        "offset": 120,
+        "size": 8
+      },
+      {
+        "name": "Keys",
+        "type": "*ikev2.IKESAKeys",
+        "type_va": "0x1bbb620",
+        "offset": 128,
+        "size": 8
+      },
+      {
+        "name": "SequenceNumber",
+        "type": "atomic.Uint32",
+        "type_va": "0x1e76fc0",
+        "offset": 136,
+        "size": 4
+      },
+      {
+        "name": "ikeEncrID",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 140,
+        "size": 2
+      },
+      {
+        "name": "ikePRFID",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 142,
+        "size": 2
+      },
+      {
+        "name": "ikeIntegID",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 144,
+        "size": 2
+      },
+      {
+        "name": "ikeIsAEAD",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 146,
+        "size": 1
+      },
+      {
+        "name": "ikeEncrKeyLenBits",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 152,
+        "size": 8
+      },
+      {
+        "name": "saMu",
+        "type": "sync.RWMutex",
+        "type_va": "0x1feb7a0",
+        "offset": 160,
+        "size": 24
+      },
+      {
+        "name": "ChildSAIn",
+        "type": "*ipsec.SecurityAssociation",
+        "type_va": "0x1db8160",
+        "offset": 184,
+        "size": 8
+      },
+      {
+        "name": "ChildSAOut",
+        "type": "*ipsec.SecurityAssociation",
+        "type_va": "0x1db8160",
+        "offset": 192,
+        "size": 8
+      },
+      {
+        "name": "ChildSAsIn",
+        "type": "map[uint32]*ipsec.SecurityAssociation",
+        "type_va": "0x1d92940",
+        "offset": 200,
+        "size": 8
+      },
+      {
+        "name": "childSPI",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 208,
+        "size": 4
+      },
+      {
+        "name": "childDH",
+        "type": "*crypto.DiffieHellman",
+        "type_va": "0x1db7ee0",
+        "offset": 216,
+        "size": 8
+      },
+      {
+        "name": "childEncrID",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 224,
+        "size": 2
+      },
+      {
+        "name": "childIntegID",
+        "type": "uint16",
+        "type_va": "0x1c5e9e0",
+        "offset": 226,
+        "size": 2
+      },
+      {
+        "name": "childEncrKeyLenBits",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 232,
+        "size": 8
+      },
+      {
+        "name": "childESN",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 240,
+        "size": 1
+      },
+      {
+        "name": "sentESPProposals",
+        "type": "[]*ikev2.Proposal",
+        "type_va": "0x1c25b20",
+        "offset": 248,
+        "size": 24
+      },
+      {
+        "name": "sentIKEProposals",
+        "type": "[]*ikev2.Proposal",
+        "type_va": "0x1c25b20",
+        "offset": 272,
+        "size": 24
+      },
+      {
+        "name": "natKeepaliveStarted",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 296,
+        "size": 1
+      },
+      {
+        "name": "natDetected",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 297,
+        "size": 1
+      },
+      {
+        "name": "lastInboundTime",
+        "type": "time.Time",
+        "type_va": "0x2171d40",
+        "offset": 304,
+        "size": 24
+      },
+      {
+        "name": "lastOutboundTime",
+        "type": "time.Time",
+        "type_va": "0x2171d40",
+        "offset": 328,
+        "size": 24
+      },
+      {
+        "name": "cpConfig",
+        "type": "*ikev2.CPConfig",
+        "type_va": "0x1d605a0",
+        "offset": 352,
+        "size": 8
+      },
+      {
+        "name": "tsi",
+        "type": "[]*ikev2.TrafficSelector",
+        "type_va": "0x1c25b60",
+        "offset": 360,
+        "size": 24
+      },
+      {
+        "name": "tsr",
+        "type": "[]*ikev2.TrafficSelector",
+        "type_va": "0x1c25b60",
+        "offset": 384,
+        "size": 24
+      },
+      {
+        "name": "netUndos",
+        "type": "[]func() error",
+        "type_va": "0x1c23ec0",
+        "offset": 408,
+        "size": 24
+      },
+      {
+        "name": "xfrmMgr",
+        "type": "*driver.XFRMManager",
+        "type_va": "0x20e6e80",
+        "offset": 432,
+        "size": 8
+      },
+      {
+        "name": "done",
+        "type": "chan struct {}",
+        "type_va": "0x1c65360",
+        "offset": 440,
+        "size": 8
+      },
+      {
+        "name": "innerPacketMu",
+        "type": "sync.RWMutex",
+        "type_va": "0x1feb7a0",
+        "offset": 448,
+        "size": 24
+      },
+      {
+        "name": "innerPacketEndpoint",
+        "type": "swu.InnerPacketEndpoint",
+        "type_va": "0x1e1b440",
+        "offset": 472,
+        "size": 16
+      },
+      {
+        "name": "xfrmLocalIP",
+        "type": "net.IP",
+        "type_va": "0x20f73e0",
+        "offset": 488,
+        "size": 24
+      },
+      {
+        "name": "xfrmRemoteIP",
+        "type": "net.IP",
+        "type_va": "0x20f73e0",
+        "offset": 512,
+        "size": 24
+      },
+      {
+        "name": "xfrmLocalPort",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 536,
+        "size": 8
+      },
+      {
+        "name": "xfrmRemotePort",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 544,
+        "size": 8
+      },
+      {
+        "name": "xfrmIfID",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 552,
+        "size": 8
+      },
+      {
+        "name": "OnSessionDown",
+        "type": "func()",
+        "type_va": "0x1c1ac80",
+        "offset": 560,
+        "size": 8
+      },
+      {
+        "name": "OnReauthNeeded",
+        "type": "func()",
+        "type_va": "0x1c1ac80",
+        "offset": 568,
+        "size": 8
+      },
+      {
+        "name": "reauthOverlapGrace",
+        "type": "time.Duration",
+        "type_va": "0x2015f40",
+        "offset": 576,
+        "size": 8
+      },
+      {
+        "name": "OnRedirect",
+        "type": "func(string)",
+        "type_va": "0x1c65b60",
+        "offset": 584,
+        "size": 8
+      },
+      {
+        "name": "rekeyMu",
+        "type": "sync.Mutex",
+        "type_va": "0x1e76a20",
+        "offset": 592,
+        "size": 8
+      },
+      {
+        "name": "lastRekeyTime",
+        "type": "time.Time",
+        "type_va": "0x2171d40",
+        "offset": 600,
+        "size": 24
+      },
+      {
+        "name": "lastIKERekeyTime",
+        "type": "time.Time",
+        "type_va": "0x2171d40",
+        "offset": 624,
+        "size": 24
+      },
+      {
+        "name": "rekeyResetCh",
+        "type": "chan struct {}",
+        "type_va": "0x1c65360",
+        "offset": 648,
+        "size": 8
+      },
+      {
+        "name": "childRekeyResetCh",
+        "type": "chan struct {}",
+        "type_va": "0x1c65360",
+        "offset": 656,
+        "size": 8
+      },
+      {
+        "name": "authLifetime",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 664,
+        "size": 4
+      },
+      {
+        "name": "childOutPolicies",
+        "type": "[]swu.childOutPolicy",
+        "type_va": "0x1c25ba0",
+        "offset": 672,
+        "size": 24
+      },
+      {
+        "name": "xfrmPolicies",
+        "type": "[]driver.XFRMSPConfig",
+        "type_va": "0x1c25be0",
+        "offset": 696,
+        "size": 24
+      },
+      {
+        "name": "ikeMu",
+        "type": "sync.Mutex",
+        "type_va": "0x1e76a20",
+        "offset": 720,
+        "size": 8
+      },
+      {
+        "name": "ikeStarted",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 728,
+        "size": 1
+      },
+      {
+        "name": "ikeWaiters",
+        "type": "map[swu.ikeWaitKey]chan []uint8",
+        "type_va": "0x1d929c0",
+        "offset": 736,
+        "size": 8
+      },
+      {
+        "name": "ikePending",
+        "type": "map[swu.ikeWaitKey][]uint8",
+        "type_va": "0x1d92a40",
+        "offset": 744,
+        "size": 8
+      },
+      {
+        "name": "ikeControlAlive",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 752,
+        "size": 1
+      },
+      {
+        "name": "ni",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 760,
+        "size": 24
+      },
+      {
+        "name": "nr",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 784,
+        "size": 24
+      },
+      {
+        "name": "msgBuffer",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 808,
+        "size": 24
+      },
+      {
+        "name": "respMsgBuffer",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 832,
+        "size": 24
+      },
+      {
+        "name": "MSK",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 856,
+        "size": 24
+      },
+      {
+        "name": "lastEncryptedMsg",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 880,
+        "size": 24
+      },
+      {
+        "name": "lastEncryptedMsgID",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 904,
+        "size": 4
+      },
+      {
+        "name": "eapTranscript",
+        "type": "[][]uint8",
+        "type_va": "0x1c1c2a0",
+        "offset": 912,
+        "size": 24
+      },
+      {
+        "name": "eapCheckcodeTranscript",
+        "type": "[][]uint8",
+        "type_va": "0x1c1c2a0",
+        "offset": 936,
+        "size": 24
+      },
+      {
+        "name": "ikeIdentity",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 960,
+        "size": 16
+      },
+      {
+        "name": "eapIdentity",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 976,
+        "size": 16
+      },
+      {
+        "name": "eapIdentitySet",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 992,
+        "size": 1
+      },
+      {
+        "name": "lastConfirmedEAPStage",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 1000,
+        "size": 16
+      },
+      {
+        "name": "eapSuccessReceived",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 1016,
+        "size": 1
+      },
+      {
+        "name": "negotiatedEAPType",
+        "type": "uint8",
+        "type_va": "0x1c5e960",
+        "offset": 1017,
+        "size": 1
+      },
+      {
+        "name": "cookie",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 1024,
+        "size": 24
+      },
+      {
+        "name": "sendCookie",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 1048,
+        "size": 1
+      },
+      {
+        "name": "resumeTicket",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 1056,
+        "size": 24
+      },
+      {
+        "name": "resumeOldSKd",
+        "type": "[]uint8",
+        "type_va": "0x1c20240",
+        "offset": 1080,
+        "size": 24
+      },
+      {
+        "name": "fastReauthCtx",
+        "type": "*eap.FastReauthContext",
+        "type_va": "0x1db8660",
+        "offset": 1104,
+        "size": 8
+      },
+      {
+        "name": "mobikeSupported",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 1112,
+        "size": 1
+      },
+      {
+        "name": "fragmentationSupported",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 1113,
+        "size": 1
+      },
+      {
+        "name": "ikeFragmentMTU",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 1116,
+        "size": 4
+      },
+      {
+        "name": "fragmentBuf",
+        "type": "*swu.fragmentBuffer",
+        "type_va": "0x1d553a0",
+        "offset": 1120,
+        "size": 8
+      },
+      {
+        "name": "ctx",
+        "type": "context.Context",
+        "type_va": "0x1e1a7c0",
+        "offset": 1128,
+        "size": 16
+      },
+      {
+        "name": "cancel",
+        "type": "context.CancelFunc",
+        "type_va": "0x1c86880",
+        "offset": 1144,
+        "size": 8
+      },
+      {
+        "name": "reauthTrigger",
+        "type": "chan struct {}",
+        "type_va": "0x1c65360",
+        "offset": 1152,
+        "size": 8
+      },
+      {
+        "name": "taskMgr",
+        "type": "*swu.TaskManager",
+        "type_va": "0x1f5bec0",
+        "offset": 1160,
+        "size": 8
+      },
+      {
+        "name": "ws",
+        "type": "*swu.WiresharkDebugger",
+        "type_va": "0x1f0dd80",
+        "offset": 1168,
+        "size": 8
+      },
+      {
+        "name": "Logger",
+        "type": "*zap.Logger",
+        "type_va": "0x210ea00",
+        "offset": 1176,
+        "size": 8
+      },
+      {
+        "name": "statusMu",
+        "type": "sync.RWMutex",
+        "type_va": "0x1feb7a0",
+        "offset": 1184,
+        "size": 24
+      },
+      {
+        "name": "terminalErrMsg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 1208,
+        "size": 16
+      },
+      {
+        "name": "offeredIKEProfiles",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 1224,
+        "size": 24
+      },
+      {
+        "name": "effectiveCipherPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 1248,
+        "size": 16
+      },
+      {
+        "name": "negotiationFallbackCount",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 1264,
+        "size": 8
+      },
+      {
+        "name": "ikeProfileOffset",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 1272,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x2198660"
+  },
+  {
+    "name": "*swu.SessionManager",
+    "va": "0x1dad6e0",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "mu",
+        "type": "sync.Mutex",
+        "type_va": "0x1e76a20",
+        "offset": 0,
+        "size": 8
+      },
+      {
+        "name": "sessions",
+        "type": "map[string]*swu.Session",
+        "type_va": "0x1d92d40",
+        "offset": 8,
+        "size": 8
+      },
+      {
+        "name": "cancels",
+        "type": "map[string]context.CancelFunc",
+        "type_va": "0x1d92dc0",
+        "offset": 16,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x1f0df00"
+  },
+  {
+    "name": "*swu.SessionSnapshot",
+    "va": "0x1bae020",
+    "kind": 22,
+    "size": 8,
+    "fields": [
+      {
+        "name": "Established",
+        "type": "bool",
+        "type_va": "0x1c5ece0",
+        "offset": 0,
+        "size": 1
+      },
+      {
+        "name": "TUNName",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 8,
+        "size": 16
+      },
+      {
+        "name": "LastError",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 24,
+        "size": 16
+      },
+      {
+        "name": "IKEProfile",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 40,
+        "size": 16
+      },
+      {
+        "name": "IKEEncr",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 56,
+        "size": 16
+      },
+      {
+        "name": "IKEInteg",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 72,
+        "size": 16
+      },
+      {
+        "name": "IKEPRF",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 88,
+        "size": 16
+      },
+      {
+        "name": "IKEDH",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 104,
+        "size": 16
+      },
+      {
+        "name": "IPv4",
+        "type": "net.IP",
+        "type_va": "0x20f73e0",
+        "offset": 120,
+        "size": 24
+      },
+      {
+        "name": "IPv6",
+        "type": "net.IP",
+        "type_va": "0x20f73e0",
+        "offset": 144,
+        "size": 24
+      },
+      {
+        "name": "IPv6Prefix",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 168,
+        "size": 8
+      },
+      {
+        "name": "MTU",
+        "type": "uint32",
+        "type_va": "0x1c5ea60",
+        "offset": 176,
+        "size": 4
+      },
+      {
+        "name": "DNSv4",
+        "type": "[]net.IP",
+        "type_va": "0x1c21c00",
+        "offset": 184,
+        "size": 24
+      },
+      {
+        "name": "DNSv6",
+        "type": "[]net.IP",
+        "type_va": "0x1c21c00",
+        "offset": 208,
+        "size": 24
+      },
+      {
+        "name": "PCSCFv4",
+        "type": "[]net.IP",
+        "type_va": "0x1c21c00",
+        "offset": 232,
+        "size": 24
+      },
+      {
+        "name": "PCSCFv6",
+        "type": "[]net.IP",
+        "type_va": "0x1c21c00",
+        "offset": 256,
+        "size": 24
+      },
+      {
+        "name": "OfferedIKEProfiles",
+        "type": "[]string",
+        "type_va": "0x1c208c0",
+        "offset": 280,
+        "size": 24
+      },
+      {
+        "name": "EffectiveCipherPolicy",
+        "type": "string",
+        "type_va": "0x1c5e8e0",
+        "offset": 304,
+        "size": 16
+      },
+      {
+        "name": "NegotiationFallbackCount",
+        "type": "int",
+        "type_va": "0x1c5eb20",
+        "offset": 320,
+        "size": 8
+      }
+    ],
+    "struct_va": "0x213c940"
+  },
+  {
+    "name": "[]carrier.IPSec3GPPSecurityMechanism",
+    "va": "0x1c1f980",
+    "kind": 23,
+    "size": 24
+  },
+  {
+    "name": "[]policy.IPSec3GPPSecurityMechanism",
+    "va": "0x1c1f940",
+    "kind": 23,
+    "size": 24
+  },
+  {
+    "name": "[]struct { key string; elem *policy.CarrierOverride }",
+    "va": "0x1c27320",
+    "kind": 23,
+    "size": 24
+  },
+  {
+    "name": "[]struct { key string; elem *policy.CarrierPreset }",
+    "va": "0x1c27360",
+    "kind": 23,
+    "size": 24
+  },
+  {
+    "name": "[]struct { key string; elem *swu.Session }",
+    "va": "0x1c25f20",
+    "kind": 23,
+    "size": 24
+  },
+  {
+    "name": "func() swu.SessionSnapshot",
+    "va": "0x1c6c6a0",
+    "kind": 19,
+    "size": 8
+  },
+  {
+    "name": "func(context.Context, string, *swu.Config) (*swu.Session, error)",
+    "va": "0x1d1daa0",
+    "kind": 19,
+    "size": 8
+  },
+  {
+    "name": "func(context.Context, string, time.Duration) (swu.SessionSnapshot, error)",
+    "va": "0x1d3acc0",
+    "kind": 19,
+    "size": 8
+  },
+  {
+    "name": "func(string) (*swu.Session, bool)",
+    "va": "0x1cd3ce0",
+    "kind": 19,
+    "size": 8
+  },
+  {
+    "name": "func(string) (swu.SessionSnapshot, bool)",
+    "va": "0x1ce17c0",
+    "kind": 19,
+    "size": 8
+  },
+  {
+    "name": "map[string]*swu.Session",
+    "va": "0x1d92d40",
+    "kind": 21,
+    "size": 8
+  },
+  {
+    "name": "map[string]policy.CarrierOverride",
+    "va": "0x1d93480",
+    "kind": 21,
+    "size": 8
+  },
+  {
+    "name": "map[string]policy.CarrierPreset",
+    "va": "0x1d93500",
+    "kind": 21,
+    "size": 8
+  }
+]

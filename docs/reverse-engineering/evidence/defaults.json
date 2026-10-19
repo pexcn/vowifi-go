@@ -1,0 +1,146 @@
+{
+  "MCC": "",
+  "MNC": "",
+  "PresetID": "",
+  "MatchedTemplate": "",
+  "E911": {
+    "Enabled": false,
+    "Provider": "",
+    "EntitlementURL": "",
+    "WebsheetHostPolicy": ""
+  },
+  "IPStackType": "ipv4v6",
+  "EPDGAddr": "<DefaultCarrierStandardEPDGAddr(MCC,MNC)>",
+  "EPDGAddrSource": "standard",
+  "EPDGPort": 500,
+  "APN": "ims",
+  "DNSServer": "",
+  "NATKeepaliveSeconds": 20,
+  "DPDIntervalSeconds": 120,
+  "AKAChallengeMode": "minimal",
+  "IKEIdentityMode": "epc_nai",
+  "AKAIdentityMode": "epc_nai",
+  "IKEProposals": [
+    "aes128-sha256-modp2048",
+    "aes128-sha256-modp1024",
+    "aes128-sha1-modp1024",
+    "aes256-sha1-modp1024"
+  ],
+  "ESPProposals": [
+    "aes256gcm16",
+    "aes128gcm16",
+    "aes128-sha256",
+    "aes128-sha1"
+  ],
+  "EnableLegacyCiphers": false,
+  "AllowedLegacyCiphers": [],
+  "AlgorithmPolicy": "",
+  "DeviceIdentityIMEI": "",
+  "DeviceIdentityEnabled": false,
+  "DeviceModel": "iphone15,4",
+  "IMSDomain": "<DefaultCarrierIMSDomain(MCC,MNC)>",
+  "IMSRealm": "<DefaultCarrierIMSDomain(MCC,MNC)>",
+  "IMSRegistrar": "",
+  "IMSPCSCF": "",
+  "IMSUserAgent": "",
+  "IMSTransport": "auto",
+  "IMSIdentitySource": "derived",
+  "IMSLocalPort": 5060,
+  "IMSTCPKeepaliveSeconds": 30,
+  "IMSOptionsPingIntervalSeconds": 45,
+  "DPDKeepaliveIntervalSeconds": 0,
+  "ReauthIntervalSeconds": 0,
+  "IMSRegisterTemplate": {
+    "ID": "defaultIMSRegisterTemplate",
+    "UsePlainDigestPlaceholder": true,
+    "Expires": 600000,
+    "SMSReceiverTransport": "dual",
+    "ContactMode": "android_default",
+    "FixedPANI": "",
+    "SupportedHeader": "path,sec-agree",
+    "AllowHeader": "OPTIONS, REGISTER, SUBSCRIBE, NOTIFY, PUBLISH, INVITE, ACK, BYE, CANCEL, UPDATE, PRACK, REFER, INFO, MESSAGE",
+    "AccessType": "wlan1",
+    "ICSIRef": "urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel,urn%3Aurn-7%3A3gpp-service.ims.icsi.oma.cpm.msg,urn%3Aurn-7%3A3gpp-service.ims.icsi.oma.cpm.sms",
+    "ContactParamOrder": [
+      "access_type",
+      "sip_instance",
+      "audio",
+      "smsip",
+      "icsi_ref"
+    ],
+    "VoiceSupportedHeader": "100rel, timer, replaces, norefersub, early-session",
+    "VoiceAllowHeader": "INVITE, ACK, CANCEL, BYE, UPDATE, REFER, NOTIFY, MESSAGE, OPTIONS",
+    "VoiceAcceptContact": "*;+g.3gpp.icsi-ref=\"urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel\"",
+    "VoicePPreferredService": "urn:urn-7:3gpp-service.ims.icsi.mmtel",
+    "ForceHeaderPort5060": false,
+    "IncludePANIAuthenticated": true,
+    "IncludeConnectionKeepaliveInAuth": false,
+    "SecAgreeMode": "auto",
+    "SecurityClientIncludesServerParams": true,
+    "SecurityClientMechanisms": [
+      {
+        "Alg": "hmac-md5-96",
+        "EAlg": "des-ede3-cbc",
+        "Prot": "esp",
+        "Mode": "trans"
+      },
+      {
+        "Alg": "hmac-md5-96",
+        "EAlg": "aes-cbc",
+        "Prot": "esp",
+        "Mode": "trans"
+      },
+      {
+        "Alg": "hmac-md5-96",
+        "EAlg": "null",
+        "Prot": "esp",
+        "Mode": "trans"
+      },
+      {
+        "Alg": "hmac-sha-1-96",
+        "EAlg": "des-ede3-cbc",
+        "Prot": "esp",
+        "Mode": "trans"
+      },
+      {
+        "Alg": "hmac-sha-1-96",
+        "EAlg": "aes-cbc",
+        "Prot": "esp",
+        "Mode": "trans"
+      },
+      {
+        "Alg": "hmac-sha-1-96",
+        "EAlg": "null",
+        "Prot": "esp",
+        "Mode": "trans"
+      }
+    ],
+    "StrictSecurityServerOffer": false,
+    "EnableInitialRejectFallback": true,
+    "FallbackIncludesServerParamsInSecCl": false,
+    "RegisterPolicy": {
+      "ID": "default",
+      "TemporaryStatusCodes": [
+        408,
+        429,
+        500,
+        502,
+        503,
+        504
+      ],
+      "ForbiddenStatusCodes": [
+        403
+      ],
+      "InitialRejectFallbackStatusCodes": [
+        400,
+        403,
+        500
+      ],
+      "TemporaryRetrySeconds": 60
+    }
+  },
+  "IMSRegisterPolicySource": "default",
+  "SMSRoutingMethod": "",
+  "SMSRoutingGW": "",
+  "ForceSMSCAuth": false
+}

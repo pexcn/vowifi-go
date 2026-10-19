@@ -1,0 +1,104 @@
+[
+  {
+    "name": "presets/",
+    "record_va": "0x27d3c58",
+    "data_va": "0x0",
+    "length": 0
+  },
+  {
+    "name": "presets/2degrees_nz_53024.yaml",
+    "record_va": "0x27d3c88",
+    "data_va": "0x2243941",
+    "length": 258
+  },
+  {
+    "name": "presets/att_310280.yaml",
+    "record_va": "0x27d3cb8",
+    "data_va": "0x22463ee",
+    "length": 862
+  },
+  {
+    "name": "presets/att_310410.yaml",
+    "record_va": "0x27d3ce8",
+    "data_va": "0x224674c",
+    "length": 869
+  },
+  {
+    "name": "presets/csl_454000.yaml",
+    "record_va": "0x27d3d18",
+    "data_va": "0x2242f7b",
+    "length": 233
+  },
+  {
+    "name": "presets/cteuk_23433.yaml",
+    "record_va": "0x27d3d48",
+    "data_va": "0x2242b2f",
+    "length": 213
+  },
+  {
+    "name": "presets/giffgaff_23410.yaml",
+    "record_va": "0x27d3d78",
+    "data_va": "0x2245156",
+    "length": 497
+  },
+  {
+    "name": "presets/o2_de_26203.yaml",
+    "record_va": "0x27d3da8",
+    "data_va": "0x224474c",
+    "length": 409
+  },
+  {
+    "name": "presets/o2_de_26207_alias.yaml",
+    "record_va": "0x27d3dd8",
+    "data_va": "0x22448e5",
+    "length": 411
+  },
+  {
+    "name": "presets/one_nz_53001.yaml",
+    "record_va": "0x27d3e08",
+    "data_va": "0x2230d7f",
+    "length": 69
+  },
+  {
+    "name": "presets/spark_nz_53005.yaml",
+    "record_va": "0x27d3e38",
+    "data_va": "0x2244147",
+    "length": 379
+  },
+  {
+    "name": "presets/sunrise_22802.yaml",
+    "record_va": "0x27d3e68",
+    "data_va": "0x22428dc",
+    "length": 191
+  },
+  {
+    "name": "presets/three_hk_454003.yaml",
+    "record_va": "0x27d3e98",
+    "data_va": "0x2243b50",
+    "length": 279
+  },
+  {
+    "name": "presets/three_uk_234020.yaml",
+    "record_va": "0x27d3ec8",
+    "data_va": "0x2245dfe",
+    "length": 662
+  },
+  {
+    "name": "presets/tmobile_310240.yaml",
+    "record_va": "0x27d3ef8",
+    "data_va": "0x2242db1",
+    "length": 229
+  },
+  {
+    "name": "presets/tmobile_310260.yaml",
+    "record_va": "0x27d3f28",
+    "data_va": "0x2242e96",
+    "length": 229
+  },
+  {
+    "name": "presets/vodafone_nl_20404.yaml",
+    "record_va": "0x27d3f58",
+    "data_va": "0x2244c23",
+    "length": 420
+  }
+]
