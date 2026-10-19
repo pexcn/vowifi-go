@@ -242,6 +242,24 @@ func (p *mockPeer) handshake() error {
 	if e != nil {
 		return e
 	}
+	var eapOnlyOffers int
+	for _, payload := range m.Payloads {
+		if payload.Type == ikev2.Notify {
+			kind, _, err := ikev2.ParseNotification(payload.Data)
+			if err != nil {
+				return err
+			}
+			if kind == 16417 {
+				if !bytes.Equal(payload.Data, []byte{0, 0, 0x40, 0x21}) {
+					return errors.New("invalid EAP_ONLY_AUTHENTICATION notify")
+				}
+				eapOnlyOffers++
+			}
+		}
+	}
+	if eapOnlyOffers > 1 || (eapOnlyOffers == 1) != p.cfg.EAPOnlyAuthentication {
+		return errors.New("wrong RFC 5998 capability offer")
+	}
 	cpRequest, err := ikev2.One(m.Payloads, ikev2.CP)
 	if err != nil {
 		return err
@@ -303,6 +321,9 @@ func (p *mockPeer) handshake() error {
 		}
 	}
 	ps := []ikev2.Payload{{Type: ikev2.IDr, Data: p.peerID}, {Type: ikev2.CERT, Data: append([]byte{4}, p.cert...)}, {Type: ikev2.AUTH, Data: auth}, {Type: ikev2.EAP, Data: challenge}}
+	if strings.HasPrefix(p.mode, "eap-only") {
+		ps = []ikev2.Payload{{Type: ikev2.IDr, Data: p.peerID}, {Type: ikev2.EAP, Data: challenge}}
+	}
 	switch p.mode {
 	case "bad-signature":
 		ps[2].Data[len(auth)-1] ^= 1
@@ -310,14 +331,47 @@ func (p *mockPeer) handshake() error {
 		ps = append(ps[:2], ps[3:]...)
 	case "premature-success":
 		ps[3].Data = []byte{eap.Success, 7, 0, 4}
+	case "eap-only-bad-mac":
+		ps[1].Data[len(challenge)-1] ^= 1
+	case "eap-only-premature-success":
+		ps[1].Data = []byte{eap.Success, 7, 0, 4}
+	case "eap-only-unsupported":
+		ps[1].Data = []byte{eap.Request, 7, 0, 5, 4} // EAP-MD5 cannot authenticate this SA.
+	case "eap-only-missing-id":
+		ps = ps[1:]
+	case "eap-only-duplicate-id":
+		ps = append(ps, ps[0])
+	}
+	round := uint32(2)
+	if p.mode == "eap-only-identity" {
+		if e = p.response(m.Header, []ikev2.Payload{{Type: ikev2.IDr, Data: p.peerID}, {Type: ikev2.EAP, Data: []byte{eap.Request, 6, 0, 5, eap.Identity}}}); e != nil {
+			return e
+		}
+		m, e = p.readAuth(round)
+		if e != nil {
+			return e
+		}
+		identity, err := ikev2.One(m.Payloads, ikev2.EAP)
+		if err != nil {
+			return err
+		}
+		packet, err := eap.Parse(identity)
+		if err != nil || packet.Code != eap.Response || packet.Identifier != 6 || packet.Type != eap.Identity || string(packet.Data) != p.cfg.NAI {
+			return errors.New("invalid EAP-only identity response")
+		}
+		ps = []ikev2.Payload{{Type: ikev2.EAP, Data: challenge}}
+		round++
 	}
 	if e = p.response(m.Header, ps); e != nil {
 		return e
 	}
-	if p.mode == "bad-cert" || p.mode == "bad-signature" || p.mode == "missing-auth" || p.mode == "premature-success" {
+	switch p.mode {
+	case "bad-cert", "bad-signature", "missing-auth", "premature-success",
+		"eap-only-bad-mac", "eap-only-premature-success", "eap-only-unsupported",
+		"eap-only-missing-id", "eap-only-duplicate-id":
 		return nil
 	}
-	m, e = p.readAuth(2)
+	m, e = p.readAuth(round)
 	if e != nil {
 		return e
 	}
@@ -344,7 +398,7 @@ func (p *mockPeer) handshake() error {
 	if e = p.response(m.Header, []ikev2.Payload{{Type: ikev2.EAP, Data: []byte{eap.Success, 7, 0, 4}}}); e != nil {
 		return e
 	}
-	m, e = p.readAuth(3)
+	m, e = p.readAuth(round + 1)
 	if e != nil {
 		return e
 	}
@@ -372,10 +426,10 @@ func (p *mockPeer) handshake() error {
 		return e
 	}
 	auth = append([]byte{2, 0, 0, 0}, auth...)
-	if p.mode == "bad-final" {
+	if p.mode == "bad-final" || p.mode == "eap-only-bad-final" {
 		auth[len(auth)-1] ^= 1
 	}
-	if p.mode == "cert-final" {
+	if p.mode == "cert-final" || p.mode == "eap-only-cert-final" {
 		auth, e = p.certAuth()
 		if e != nil {
 			return e
@@ -406,6 +460,36 @@ func (p *mockPeer) handshake() error {
 		return e
 	}
 	ps = []ikev2.Payload{{Type: ikev2.AUTH, Data: auth}, {Type: ikev2.SA, Data: child}, {Type: ikev2.TSi, Data: local}, {Type: ikev2.TSr, Data: remote}, {Type: ikev2.CP, Data: cp}}
+	switch p.mode {
+	case "eap-only-cp-reserved":
+		cp[1], cp[2], cp[3] = 0xaa, 0xbb, 0xcc
+		for offset := 4; offset < len(cp); {
+			length := int(binary.BigEndian.Uint16(cp[offset+2:]))
+			cp[offset] |= 0x80
+			offset += 4 + length
+		}
+	case "eap-only-cp-tv":
+		// Literal private short attribute before the assigned address. Do not
+		// use our TLV encoder to manufacture the compatibility wire format.
+		cp = append([]byte{2, 0, 0, 0, 0xf0, 0, 5, 0xdc}, cp[4:]...)
+	case "eap-only-cp-empty-optional":
+		cp = append(cp, []byte{0, 3, 0, 0, 0, 8, 0, 0, 0, 10, 0, 0, 0, 21, 0, 0}...)
+	case "eap-only-cp-wrong-kind":
+		cp[0] = 3
+	case "eap-only-cp-truncated":
+		cp = []byte{2, 0, 0, 0, 0, 1, 0, 8, 10, 0, 0, 2}
+	case "eap-only-cp-invalid-ip":
+		cp = []byte{2, 0, 0, 0, 0, 1, 0, 3, 10, 0, 0}
+	case "eap-only-cp-no-address":
+		cp = []byte{2, 0, 0, 0, 0, 1, 0, 0, 0, 8, 0, 0}
+	}
+	ps[len(ps)-1].Data = cp
+	if p.mode == "eap-only-missing-final" {
+		ps = ps[1:]
+	}
+	if p.mode == "eap-only-changed-id" {
+		ps = append(ps, ikev2.Payload{Type: ikev2.IDr, Data: append([]byte{2, 0, 0, 0}, []byte("changed.test")...)})
+	}
 	material, e := vc.PRFSHA256.Plus(p.keys.SKd, append(append([]byte{}, p.ni...), p.nr...), 96)
 	if e != nil {
 		return e
@@ -554,6 +638,117 @@ func TestRealUDPCookieAKAChildESPAndDPD(t *testing.T) {
 		t.Fatal(s.Err())
 	}
 }
+func TestEAPOnlyMutualAKAAndChildESP(t *testing.T) {
+	for _, mode := range []string{"eap-only", "eap-only-identity", "certificate-fallback", "eap-only-cp-reserved", "eap-only-cp-tv", "eap-only-cp-empty-optional"} {
+		t.Run(mode, func(t *testing.T) {
+			p := newMockPeer(t, mode)
+			p.cfg.EAPOnlyAuthentication = true
+			if mode != "certificate-fallback" {
+				p.cfg.Roots = nil // No certificate was sent or trusted on this path.
+			}
+			p.start()
+			s, err := Start(context.Background(), p.cfg)
+			if err != nil {
+				t.Fatal(err)
+			}
+			defer s.Close()
+			p.check(t)
+			cfg := s.Configuration()
+			if len(cfg.Addresses) != 1 || cfg.Addresses[0].String() != "10.0.0.2" || len(cfg.DNS) != 1 || cfg.DNS[0].String() != "10.0.0.53" || len(cfg.PCSCF) != 1 || cfg.PCSCF[0].String() != "10.0.0.1" {
+				t.Fatalf("CFG_REPLY values not preserved: %+v", cfg)
+			}
+			if p.cfg.SIM.(*testSIM).calls.Load() != 1 {
+				t.Fatal("mutual AKA was not completed")
+			}
+			packet := inner([4]byte{10, 0, 0, 2}, [4]byte{10, 0, 0, 1})
+			if err = s.WritePacket(context.Background(), packet); err != nil {
+				t.Fatal(err)
+			}
+			wire, err := p.read(p.natt, false)
+			if err != nil {
+				t.Fatal(err)
+			}
+			got, next, err := p.fromClient.Open(wire)
+			if err != nil || next != 4 || !bytes.Equal(got, packet) {
+				t.Fatalf("EAP-only Child SA did not carry ESP: %x %d %v", got, next, err)
+			}
+			inbound := inner([4]byte{10, 0, 0, 1}, [4]byte{10, 0, 0, 2})
+			wire, err = p.toClient.Seal(inbound, 4)
+			if err != nil {
+				t.Fatal(err)
+			}
+			if err = p.send(p.natt, wire, false); err != nil {
+				t.Fatal(err)
+			}
+			ctx, cancel := context.WithTimeout(context.Background(), time.Second)
+			defer cancel()
+			got, err = s.ReadPacket(ctx)
+			if err != nil || !bytes.Equal(got, inbound) {
+				t.Fatalf("EAP-only inbound ESP: %x %v", got, err)
+			}
+		})
+	}
+}
+
+func TestConfigurationFailuresCloseTransport(t *testing.T) {
+	for _, tc := range []struct{ mode, errorText string }{
+		{"eap-only-cp-wrong-kind", "got cfg_type=3"},
+		{"eap-only-cp-truncated", "length=8 exceeds remaining=4"},
+		{"eap-only-cp-invalid-ip", "type=1, length=3, expected=4"},
+		{"eap-only-cp-no-address", "no assigned inner IP address"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			p := newMockPeer(t, tc.mode)
+			p.cfg.EAPOnlyAuthentication = true
+			p.start()
+			s, err := Start(context.Background(), p.cfg)
+			if s != nil || err == nil || !strings.Contains(err.Error(), tc.errorText) {
+				t.Fatalf("invalid configuration accepted or diagnostic lost: session=%v err=%v", s, err)
+			}
+			p.check(t)
+			if !p.transport.closed.Load() {
+				t.Fatal("failed configuration leaked transport")
+			}
+		})
+	}
+}
+
+func TestEAPOnlyAuthenticationFailuresCloseTransport(t *testing.T) {
+	for _, tc := range []struct{ mode, errorText string }{
+		{"eap-only-bad-mac", "MAC verification failed"},
+		{"eap-only-premature-success", "premature EAP success"},
+		{"eap-only-unsupported", "unsupported EAP method"},
+		{"eap-only-missing-id", "expected one payload"},
+		{"eap-only-duplicate-id", "expected one payload"},
+		{"eap-only-changed-id", "responder ID changed"},
+		{"eap-only-bad-final", "MSK AUTH mismatch"},
+		{"eap-only-missing-final", "missing final responder AUTH"},
+		{"eap-only-cert-final", "must prove the EAP MSK"},
+		{"bad-cert", "responder certificate"},
+		{"bad-signature", "ECDSA AUTH verification failed"},
+	} {
+		t.Run(tc.mode, func(t *testing.T) {
+			p := newMockPeer(t, tc.mode)
+			p.cfg.EAPOnlyAuthentication = true
+			if tc.mode == "bad-cert" {
+				p.cfg.ServerName = "untrusted.test"
+			}
+			p.start()
+			s, err := Start(context.Background(), p.cfg)
+			if s != nil || err == nil || !strings.Contains(err.Error(), tc.errorText) {
+				t.Fatalf("accepted %s or failed for another reason: %v", tc.mode, err)
+			}
+			p.check(t)
+			if !p.transport.closed.Load() {
+				t.Fatal("failed EAP-only authentication leaked transport")
+			}
+			if (tc.mode == "bad-cert" || tc.mode == "bad-signature") && p.cfg.SIM.(*testSIM).calls.Load() != 0 {
+				t.Fatal("offered invalid certificate AUTH fell back to EAP-only")
+			}
+		})
+	}
+}
+
 func TestAuthenticationFailuresCloseTransport(t *testing.T) {
 	for _, mode := range []string{"bad-cert", "bad-signature", "missing-auth", "premature-success", "bad-final", "cert-final"} {
 		t.Run(mode, func(t *testing.T) {

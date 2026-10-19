@@ -272,6 +272,9 @@ type CPAttribute struct {
 func EncodeCP(kind byte, as []CPAttribute) ([]byte, error) {
 	b := []byte{kind, 0, 0, 0}
 	for _, a := range as {
+		if a.Type&0x8000 != 0 {
+			return nil, errors.New("CP attribute type exceeds 15 bits")
+		}
 		if len(a.Value) > 65535 {
 			return nil, errors.New("CP attribute too large")
 		}
@@ -282,25 +285,52 @@ func EncodeCP(kind byte, as []CPAttribute) ([]byte, error) {
 	return b, nil
 }
 func ParseCP(b []byte) (byte, []CPAttribute, error) {
-	if len(b) < 4 || b[1] != 0 || b[2] != 0 || b[3] != 0 {
-		return 0, nil, errors.New("invalid CP")
+	if len(b) < 4 {
+		return 0, nil, fmt.Errorf("truncated CP header: length=%d, expected at least 4", len(b))
 	}
 	kind := b[0]
-	b = b[4:]
+	// RFC 7296 sections 3.15/3.15.1 require receivers to ignore the
+	// reserved header octets and attribute R bit. Prefer the standard TLV
+	// interpretation for the entire payload, including attributes with R set.
+	attrs, tlvErr := parseCPAttributes(b[4:], false)
+	if tlvErr == nil {
+		return kind, attrs, nil
+	}
+	// Some deployed peers use the IKEv1 TV convention (high bit means a
+	// two-byte inline value). The original VoHive decoder supports it. Only
+	// use that interpretation if standard TLV fails and the whole alternate
+	// payload parses; never return attributes from a partially parsed frame.
+	attrs, tvErr := parseCPAttributes(b[4:], true)
+	if tvErr == nil {
+		return kind, attrs, nil
+	}
+	return kind, nil, fmt.Errorf("invalid CP attributes (TLV: %v; TV compatibility: %v)", tlvErr, tvErr)
+}
+
+func parseCPAttributes(b []byte, legacyTV bool) ([]CPAttribute, error) {
 	var out []CPAttribute
+	offset := 4
 	for len(b) > 0 {
 		if len(b) < 4 {
-			return 0, nil, errors.New("truncated CP attribute")
+			return nil, fmt.Errorf("truncated attribute header at offset=%d: remaining=%d", offset, len(b))
 		}
-		t := binary.BigEndian.Uint16(b)
+		rawType := binary.BigEndian.Uint16(b)
+		t := rawType & 0x7fff
+		if legacyTV && rawType&0x8000 != 0 {
+			out = append(out, CPAttribute{t, append([]byte{}, b[2:4]...)})
+			b = b[4:]
+			offset += 4
+			continue
+		}
 		n := int(binary.BigEndian.Uint16(b[2:]))
-		if t&0x8000 != 0 || n > len(b)-4 {
-			return 0, nil, errors.New("invalid CP attribute")
+		if n > len(b)-4 {
+			return nil, fmt.Errorf("attribute type=%d at offset=%d: length=%d exceeds remaining=%d", t, offset, n, len(b)-4)
 		}
 		out = append(out, CPAttribute{t, append([]byte{}, b[4:4+n]...)})
 		b = b[4+n:]
+		offset += 4 + n
 	}
-	return kind, out, nil
+	return out, nil
 }
 
 type TrafficSelector struct {

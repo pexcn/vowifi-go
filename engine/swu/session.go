@@ -27,6 +27,13 @@ import (
 var ErrRekeyRequired = errors.New("SWu SA lifetime exhausted; reconnect required (rekey not implemented)")
 
 type Config struct {
+	// EAPOnlyAuthentication offers RFC 5998 in the first IKE_AUTH request.
+	// A missing initial certificate AUTH may then defer authentication until
+	// mutual EAP-AKA and the final MSK-based responder AUTH both succeed.
+	EAPOnlyAuthentication bool
+	// EPDGFailover tries alternate resolved peers/UDP 4500 only when the
+	// initial exchange receives no datagrams, before sending any SIM identity.
+	EPDGFailover                                      bool
 	DeviceID, TraceID, EPDGAddr, DataplaneMode        string
 	AKAChallengeMode                                  string
 	IPStack                                           string
@@ -34,12 +41,15 @@ type Config struct {
 	Identity                                          identity.IMSIdentityResolution
 	SIM                                               interface{}
 	NAI, ServerName, APN                              string
+	DNSServer                                         string
 	Roots                                             *x509.CertPool
 	ResponderVerifier                                 ResponderVerifier
 	Transport                                         ipsec.DatagramConn
 	Timeout, DPDInterval, ChildLifetime, NATKeepalive time.Duration
 	Retransmits, MTU                                  int
 	EncryptionKeyBits                                 uint16
+	DHGroup                                           uint16
+	IKEAlternatives                                   []IKEProfile
 	PRF                                               vc.PRF
 	Integrity                                         vc.Integrity
 	Random                                            io.Reader
@@ -83,6 +93,10 @@ type Session struct {
 	lastPeerReply                                      []byte
 	ikeMu                                              sync.Mutex
 	encapsulated                                       bool
+	initialPeers                                       map[string]bool
+	ikeProfiles                                        []IKEProfile
+	keyExchangeGroup                                   uint16
+	keRetries                                          int
 }
 
 func Start(ctx context.Context, c Config) (*Session, error) {
@@ -158,6 +172,13 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	if c.Random == nil {
 		c.Random = rand.Reader
 	}
+	if c.DHGroup == 0 {
+		c.DHGroup = 14
+	}
+	profiles, profileErr := configuredIKEProfiles(c)
+	if profileErr != nil {
+		return nil, profileErr
+	}
 	host := strings.TrimSuffix(strings.TrimSpace(c.EPDGAddr), ".")
 	remote := host
 	if h, _, e := net.SplitHostPort(host); e == nil {
@@ -170,6 +191,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	}
 	childCtx, cancel := context.WithCancel(ctx)
 	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
+	s.ikeProfiles, s.keyExchangeGroup = profiles, c.DHGroup
 	_, port, _ := net.SplitHostPort(remote)
 	s.encapsulated = port == "4500"
 	var err error
@@ -179,7 +201,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		// Normalize to one resolved numeric peer before constructing SOCKS UDP
 		// headers. A proxy may return the numeric source for a domain target;
 		// authenticating an arbitrary relay-provided address is not acceptable.
-		peer, ips, resolveErr := resolveEPDG(childCtx, remote)
+		peer, ips, resolveErr := resolveEPDGUsingDNS(childCtx, remote, c.DNSServer)
 		if resolveErr != nil {
 			cancel()
 			return nil, resolveErr
@@ -312,29 +334,57 @@ func (s *Session) exchange(request []byte, encrypted bool) (ikev2.Message, []byt
 	if e != nil {
 		return ikev2.Message{}, nil, e
 	}
-	for attempt := 0; attempt <= s.cfg.Retransmits; attempt++ {
+	stage := fmt.Sprintf("exchange_%d", want.Exchange)
+	switch want.Exchange {
+	case ikev2.SAInit:
+		stage = "IKE_SA_INIT"
+	case ikev2.IKEAuth:
+		stage = "IKE_AUTH"
+	}
+	received, framingRejected, headerRejected, payloadRejected := 0, 0, 0, 0
+	lastRejection := "none"
+	retransmits := s.cfg.Retransmits
+	if want.Exchange == ikev2.SAInit && len(s.initialPeers) > 1 && retransmits > 2 {
+		retransmits = 2
+	}
+	for attempt := 0; attempt <= retransmits; attempt++ {
 		if e = s.ikeSend(s.ctx, request); e != nil {
-			return ikev2.Message{}, nil, e
+			return ikev2.Message{}, nil, fmt.Errorf("%s send (message_id=%d, attempt=%d): %w", stage, want.MessageID, attempt+1, e)
 		}
 		timeout := s.cfg.Timeout * time.Duration(uint64(1)<<attempt)
 		rctx, cancel := context.WithTimeout(s.ctx, timeout)
 		for {
 			b, err := s.conn.Read(rctx)
 			if err != nil {
+				// Inspect the deadline before cancel: cancel() itself sets Err(),
+				// which previously made every transport failure look like a timeout.
+				timedOut := errors.Is(rctx.Err(), context.DeadlineExceeded) || errors.Is(err, context.DeadlineExceeded)
 				cancel()
-				if rctx.Err() != nil && s.ctx.Err() == nil {
+				if timedOut && s.ctx.Err() == nil {
 					break
 				}
-				return ikev2.Message{}, nil, err
+				return ikev2.Message{}, nil, fmt.Errorf("%s receive (message_id=%d, attempt=%d): %w", stage, want.MessageID, attempt+1, err)
 			}
+			received++
 			if s.encapsulated {
 				if len(b) < 4 || binary.BigEndian.Uint32(b) != 0 {
+					framingRejected++
+					lastRejection = "not an IKE NAT-T datagram"
 					continue
 				}
 				b = b[4:]
 			}
 			h, err := ikev2.ParseHeader(b)
-			if err != nil || h.InitiatorSPI != s.spii || h.MessageID != want.MessageID || h.Exchange != want.Exchange || h.Flags != ikev2.FlagResponse || (encrypted && h.ResponderSPI == 0) || (s.spir != 0 && h.ResponderSPI != s.spir) {
+			if err != nil {
+				headerRejected++
+				lastRejection = err.Error()
+				continue
+			}
+			// RFC 7296: check I/R direction bits, allowing the version flag and
+			// reserved bits. They do not change response correlation or AUTH.
+			if h.InitiatorSPI != s.spii || h.MessageID != want.MessageID || h.Exchange != want.Exchange || h.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) != ikev2.FlagResponse || (encrypted && h.ResponderSPI == 0) || (s.spir != 0 && h.ResponderSPI != s.spir) {
+				headerRejected++
+				lastRejection = fmt.Sprintf("response mismatch (exchange=%d, message_id=%d, flags=0x%02x)", h.Exchange, h.MessageID, h.Flags)
 				continue
 			}
 			var m ikev2.Message
@@ -344,13 +394,23 @@ func (s *Session) exchange(request []byte, encrypted bool) (ikev2.Message, []byt
 				m, err = ikev2.Parse(b)
 			}
 			if err != nil {
+				payloadRejected++
+				lastRejection = err.Error()
 				continue
 			}
 			cancel()
 			return m, append([]byte{}, b...), nil
 		}
 	}
-	return ikev2.Message{}, nil, errors.New("IKE exchange retransmissions exhausted")
+	transportDiagnostics := ""
+	if diagnostic, ok := s.conn.(interface{ ReadDiagnostics() string }); ok {
+		transportDiagnostics = "; " + diagnostic.ReadDiagnostics()
+	}
+	diagnostic := fmt.Errorf("IKE exchange retransmissions exhausted (stage=%s, endpoint=%s, resolved_ips=%v, message_id=%d, nat_t=%t, transmissions=%d, received=%d, framing_rejected=%d, header_rejected=%d, payload_rejected=%d, last_rejection=%q%s)", stage, s.RemoteAddr, s.EPDGIPs, want.MessageID, s.encapsulated, retransmits+1, received, framingRejected, headerRejected, payloadRejected, lastRejection, transportDiagnostics)
+	if want.Exchange == ikev2.SAInit && received == 0 {
+		return ikev2.Message{}, nil, fmt.Errorf("%w: %v", errNoInitialResponse, diagnostic)
+	}
+	return ikev2.Message{}, nil, diagnostic
 }
 func randomUint(r io.Reader) (uint64, error) {
 	var b [8]byte
@@ -362,9 +422,6 @@ func randomUint(r io.Reader) (uint64, error) {
 			return n, nil
 		}
 	}
-}
-func (s *Session) ikeProposal() ikev2.Proposal {
-	return ikev2.Proposal{Number: 1, Protocol: 1, Transforms: []ikev2.Transform{{Type: 1, ID: 12, KeyBits: s.cfg.EncryptionKeyBits}, {Type: 2, ID: uint16(s.prf)}, {Type: 3, ID: uint16(s.integ)}, {Type: 4, ID: 14}}}
 }
 func (s *Session) espProposal(spi uint32) ikev2.Proposal {
 	return ikev2.Proposal{Number: 1, Protocol: 3, SPI: binary.BigEndian.AppendUint32(nil, spi), Transforms: []ikev2.Transform{{Type: 1, ID: 12, KeyBits: s.cfg.EncryptionKeyBits}, {Type: 3, ID: uint16(s.integ)}, {Type: 5, ID: 0}}}
@@ -408,12 +465,18 @@ func natHash(spii, spir uint64, ip net.IP, port uint16) []byte {
 	return h[:]
 }
 func (s *Session) handshake() error {
+	if s.cfg.EPDGFailover {
+		if s.initialPeers == nil {
+			s.initialPeers = make(map[string]bool)
+		}
+		s.initialPeers[s.RemoteAddr] = true
+	}
 	var e error
 	s.spii, e = randomUint(s.cfg.Random)
 	if e != nil {
 		return e
 	}
-	dh, e := vc.NewDH14(s.cfg.Random)
+	dh, e := vc.NewMODP(s.keyExchangeGroup, s.cfg.Random)
 	if e != nil {
 		return e
 	}
@@ -421,11 +484,12 @@ func (s *Session) handshake() error {
 	if _, e = io.ReadFull(s.cfg.Random, s.ni); e != nil {
 		return e
 	}
-	sa, e := ikev2.EncodeProposals([]ikev2.Proposal{s.ikeProposal()})
+	sa, e := ikev2.EncodeProposals(s.ikeProposals())
 	if e != nil {
 		return e
 	}
-	ke := append([]byte{0, 14, 0, 0}, dh.Public...)
+	ke := append(binary.BigEndian.AppendUint16(nil, s.keyExchangeGroup), 0, 0)
+	ke = append(ke, dh.Public...)
 	ps := []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.KE, Data: ke}, {Type: ikev2.Nonce, Data: s.ni}} // A mismatching source hash deliberately requests UDP encapsulation, including through proxies.
 	ps = append(ps, ikev2.Notification(16388, natHash(s.spii, 0, net.IPv4zero.To4(), 0)))
 	if h, p, e := net.SplitHostPort(s.RemoteAddr); e == nil {
@@ -445,6 +509,11 @@ func (s *Session) handshake() error {
 		}
 		response, s.initResponse, e = s.exchange(s.initRequest, false)
 		if e != nil {
+			if cookies == 0 {
+				if retried, result := s.retryInitialEndpoint(e); retried {
+					return result
+				}
+			}
 			return e
 		}
 		cookie := []byte(nil)
@@ -454,7 +523,12 @@ func (s *Session) handshake() error {
 				if e != nil {
 					return e
 				}
-				if typ == 16390 {
+				if typ == 17 { // RFC 7296 INVALID_KE_PAYLOAD
+					if len(data) != 2 {
+						return errors.New("invalid INVALID_KE_PAYLOAD group length")
+					}
+					return s.retryKEGroup(binary.BigEndian.Uint16(data))
+				} else if typ == 16390 {
 					if len(data) < 1 || len(data) > 64 {
 						return errors.New("invalid COOKIE")
 					}
@@ -483,14 +557,14 @@ func (s *Session) handshake() error {
 	if e != nil {
 		return e
 	}
-	if _, e = validateProposal(body, s.ikeProposal()); e != nil {
+	if e = s.selectIKEProfile(body); e != nil {
 		return e
 	}
 	peer, e := ikev2.One(response.Payloads, ikev2.KE)
 	if e != nil {
 		return e
 	}
-	if len(peer) != 260 || binary.BigEndian.Uint16(peer) != 14 || peer[2] != 0 || peer[3] != 0 {
+	if len(peer) != 4+len(dh.Public) || binary.BigEndian.Uint16(peer) != s.keyExchangeGroup || peer[2] != 0 || peer[3] != 0 {
 		return errors.New("invalid KE response")
 	}
 	secret, e := dh.Shared(peer[4:])
@@ -565,11 +639,15 @@ func (s *Session) authenticate() error {
 	}
 	s.idBody = append([]byte{3, 0, 0, 0}, []byte(s.cfg.NAI)...)
 	ps := []ikev2.Payload{{Type: ikev2.IDi, Data: s.idBody}, {Type: ikev2.CP, Data: cp}, {Type: ikev2.SA, Data: sa}, {Type: ikev2.TSi, Data: ts}, {Type: ikev2.TSr, Data: ts}}
+	if s.cfg.EAPOnlyAuthentication {
+		ps = append(ps, ikev2.Notification(16417, nil)) // RFC 5998, section 3.
+	}
 	if s.cfg.APN != "" {
 		ps = append(ps, ikev2.Payload{Type: ikev2.IDr, Data: append([]byte{2, 0, 0, 0}, []byte(s.cfg.APN)...)})
 	}
 	client := eap.Client{Identity: s.cfg.NAI, Provider: s.cfg.SIM.(sim.AKAProvider), Preference: s.cfg.Identity.AKAAppPreference, ChallengeMode: s.cfg.AKAChallengeMode}
 	verified := false
+	eapOnly := false
 	eapDone := false
 	sentAuth := false
 	for id := uint32(1); id <= 32; id++ {
@@ -591,6 +669,19 @@ func (s *Session) authenticate() error {
 					return fmt.Errorf("IKE_AUTH error notify %d", typ)
 				}
 			}
+		}
+		if id == 1 {
+			if _, e = s.rememberResponderIdentity(response.Payloads, true); e != nil {
+				return e
+			}
+		} else if _, present := ikev2.Find(response.Payloads, ikev2.IDr); present {
+			if _, e = s.rememberResponderIdentity(response.Payloads, false); e != nil {
+				return e
+			}
+		}
+		_, hasAuth := ikev2.Find(response.Payloads, ikev2.AUTH)
+		if id == 1 && !hasAuth && s.cfg.EAPOnlyAuthentication {
+			eapOnly = true
 		}
 		if auth, ok := ikev2.Find(response.Payloads, ikev2.AUTH); ok {
 			if sentAuth && (len(auth) == 0 || auth[0] != 2) {
@@ -621,7 +712,7 @@ func (s *Session) authenticate() error {
 			s.nextID = id + 1
 			return nil
 		}
-		if !verified {
+		if !verified && !eapOnly {
 			return errors.New("responder certificate AUTH required before EAP")
 		}
 		eapBytes, e := ikev2.One(response.Payloads, ikev2.EAP)
@@ -688,30 +779,39 @@ func (s *Session) establishChild(ps []ikev2.Payload) error {
 	}
 	cp, e := ikev2.One(ps, ikev2.CP)
 	if e != nil {
-		return e
+		return fmt.Errorf("invalid CFG_REPLY: %w", e)
 	}
 	kind, attrs, e := ikev2.ParseCP(cp)
-	if e != nil || kind != 2 {
-		return errors.New("expected CFG_REPLY")
+	if e != nil {
+		return fmt.Errorf("invalid CFG_REPLY (cfg_type=%d, length=%d): %w", kind, len(cp), e)
+	}
+	if kind != 2 {
+		return fmt.Errorf("expected CFG_REPLY (cfg_type=2), got cfg_type=%d (length=%d)", kind, len(cp))
 	}
 	configuration := Configuration{LocalSelectors: local, RemoteSelectors: remote}
 	for _, a := range attrs {
+		// An empty optional address attribute supplies no value. IPv4v6 peers
+		// may leave one family unassigned; still require a usable local address
+		// below before creating any Child SA.
+		if len(a.Value) == 0 {
+			continue
+		}
 		var addr netip.Addr
 		var ok bool
 		switch a.Type {
 		case 1, 3, 20:
 			if len(a.Value) != 4 {
-				return errors.New("invalid IPv4 CP attribute")
+				return fmt.Errorf("invalid IPv4 CP attribute (type=%d, length=%d, expected=4)", a.Type, len(a.Value))
 			}
 			addr, ok = netip.AddrFromSlice(a.Value)
 		case 8:
 			if len(a.Value) != 17 || a.Value[16] > 128 {
-				return errors.New("invalid IPv6 address CP")
+				return fmt.Errorf("invalid IPv6 address CP attribute (type=%d, length=%d, expected=17 with prefix<=128)", a.Type, len(a.Value))
 			}
 			addr, ok = netip.AddrFromSlice(a.Value[:16])
 		case 10, 21:
 			if len(a.Value) != 16 {
-				return errors.New("invalid IPv6 CP attribute")
+				return fmt.Errorf("invalid IPv6 CP attribute (type=%d, length=%d, expected=16)", a.Type, len(a.Value))
 			}
 			addr, ok = netip.AddrFromSlice(a.Value)
 		default:
@@ -767,6 +867,10 @@ func (s *Session) establishChild(ps []ikev2.Payload) error {
 }
 
 func resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
+	return resolveEPDGUsingDNS(ctx, remote, "")
+}
+
+func resolveEPDGUsingDNS(ctx context.Context, remote, dnsServer string) (string, []net.IP, error) {
 	host, port, e := net.SplitHostPort(remote)
 	if e != nil {
 		return "", nil, fmt.Errorf("invalid ePDG endpoint: %w", e)
@@ -775,7 +879,16 @@ func resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
 	if e != nil || numericPort < 1 || numericPort > 65535 {
 		return "", nil, errors.New("invalid ePDG UDP port")
 	}
-	addresses, e := net.DefaultResolver.LookupIPAddr(ctx, host)
+	resolver := net.DefaultResolver
+	if dnsServer = strings.TrimSpace(dnsServer); dnsServer != "" {
+		if _, _, err := net.SplitHostPort(dnsServer); err != nil {
+			dnsServer = net.JoinHostPort(strings.Trim(dnsServer, "[]"), "53")
+		}
+		resolver = &net.Resolver{PreferGo: true, Dial: func(c context.Context, network, _ string) (net.Conn, error) {
+			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(c, network, dnsServer)
+		}}
+	}
+	addresses, e := resolver.LookupIPAddr(ctx, host)
 	if e != nil {
 		return "", nil, fmt.Errorf("resolve ePDG: %w", e)
 	}

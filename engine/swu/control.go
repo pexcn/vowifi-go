@@ -92,14 +92,15 @@ func (s *Session) readLoop() {
 		if m.Header.InitiatorSPI != s.spii || m.Header.ResponderSPI != s.spir || m.Header.Flags&ikev2.FlagInitiator != 0 {
 			continue
 		}
-		if m.Header.Flags == ikev2.FlagResponse {
+		flags := m.Header.Flags & (ikev2.FlagInitiator | ikev2.FlagResponse)
+		if flags == ikev2.FlagResponse {
 			select {
 			case s.responses <- append([]byte{}, b...):
 			default:
 			}
 			continue
 		}
-		if m.Header.Flags != 0 {
+		if flags != 0 {
 			continue
 		}
 		if s.havePeerID && m.Header.MessageID == s.lastPeerID {

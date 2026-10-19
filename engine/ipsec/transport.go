@@ -10,6 +10,7 @@ import (
 	"strconv"
 	"strings"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -20,12 +21,14 @@ type DatagramConn interface {
 	Close() error
 }
 type udpConn struct {
-	conn        *net.UDPConn
-	writeMu     sync.Mutex
-	peer        *net.UDPAddr
-	control     net.Conn
-	relayHeader []byte
-	once        sync.Once
+	conn                                  *net.UDPConn
+	writeMu                               sync.Mutex
+	peer                                  *net.UDPAddr
+	control                               net.Conn
+	relayHeader                           []byte
+	once                                  sync.Once
+	received, peerRejected, socksRejected atomic.Uint64
+	lastSOCKSRejection                    string // guarded by writeMu
 }
 
 func DialUDP(ctx context.Context, addr string) (DatagramConn, error) {
@@ -87,11 +90,13 @@ func (c *udpConn) Read(ctx context.Context) ([]byte, error) {
 		if e != nil {
 			return nil, e
 		}
+		c.received.Add(1)
 		c.writeMu.Lock()
 		peer := *c.peer
 		header := append([]byte{}, c.relayHeader...)
 		c.writeMu.Unlock()
 		if !from.IP.Equal(peer.IP) || from.Port != peer.Port {
+			c.peerRejected.Add(1)
 			continue
 		}
 		p := b[:n]
@@ -99,11 +104,23 @@ func (c *udpConn) Read(ctx context.Context) ([]byte, error) {
 			var err error
 			p, err = decodeSOCKS(p, header)
 			if err != nil {
+				c.socksRejected.Add(1)
+				c.writeMu.Lock()
+				c.lastSOCKSRejection = err.Error()
+				c.writeMu.Unlock()
 				continue
 			}
 		}
 		return append([]byte{}, p...), nil
 	}
+}
+
+// ReadDiagnostics reports counters and codec errors, never payloads or credentials.
+func (c *udpConn) ReadDiagnostics() string {
+	c.writeMu.Lock()
+	last := c.lastSOCKSRejection
+	c.writeMu.Unlock()
+	return fmt.Sprintf("udp_received=%d, udp_peer_rejected=%d, socks_rejected=%d, last_socks_rejection=%q", c.received.Load(), c.peerRejected.Load(), c.socksRejected.Load(), last)
 }
 func (c *udpConn) Write(ctx context.Context, b []byte) error {
 	if e := ctx.Err(); e != nil {

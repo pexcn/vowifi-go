@@ -153,35 +153,57 @@ const group14Hex = "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67
 
 var group14, _ = new(big.Int).SetString(group14Hex, 16)
 
-type DH14 struct {
+// Oakley MODP group 2 (RFC 2409) is used only when explicitly offered by a
+// carrier profile. DH14 remains the engine's default.
+const group2Hex = "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67CC74020BBEA63B139B22514A08798E3404DDEF9519B3CD3A431B302B0A6DF25F14374FE1356D6D51C245E485B576625E7EC6F44C42E9A637ED6B0BFF5CB6F406B7EDEE386BFB5A899FA5AE9F24117C4B1FE649286651ECE65381FFFFFFFFFFFFFFFF"
+
+var group2, _ = new(big.Int).SetString(group2Hex, 16)
+
+type MODP struct {
 	x      *big.Int
+	p      *big.Int
 	Public []byte
 }
 
+type DH14 = MODP
+
 func NewDH14(rng io.Reader) (*DH14, error) {
+	return NewMODP(14, rng)
+}
+
+func NewMODP(group uint16, rng io.Reader) (*MODP, error) {
+	var p *big.Int
+	switch group {
+	case 14:
+		p = group14
+	case 2:
+		p = group2
+	default:
+		return nil, errors.New("unsupported MODP group")
+	}
 	if rng == nil {
 		rng = rand.Reader
 	}
-	q := new(big.Int).Rsh(new(big.Int).Sub(group14, big.NewInt(1)), 1)
+	q := new(big.Int).Rsh(new(big.Int).Sub(p, big.NewInt(1)), 1)
 	x, e := rand.Int(rng, new(big.Int).Sub(q, big.NewInt(3)))
 	if e != nil {
 		return nil, e
 	}
 	x.Add(x, big.NewInt(2))
-	pub := new(big.Int).Exp(big.NewInt(2), x, group14)
-	return &DH14{x: x, Public: pub.FillBytes(make([]byte, 256))}, nil
+	pub := new(big.Int).Exp(big.NewInt(2), x, p)
+	return &MODP{x: x, p: p, Public: pub.FillBytes(make([]byte, p.BitLen()/8))}, nil
 }
-func (d *DH14) Shared(peer []byte) ([]byte, error) {
-	if len(peer) != 256 {
-		return nil, errors.New("invalid DH14 public length")
+func (d *MODP) Shared(peer []byte) ([]byte, error) {
+	if len(peer) != len(d.Public) {
+		return nil, errors.New("invalid MODP public length")
 	}
 	y := new(big.Int).SetBytes(peer)
-	max := new(big.Int).Sub(group14, big.NewInt(1))
+	max := new(big.Int).Sub(d.p, big.NewInt(1))
 	q := new(big.Int).Rsh(new(big.Int).Set(max), 1)
-	if y.Cmp(big.NewInt(1)) <= 0 || y.Cmp(max) >= 0 || new(big.Int).Exp(y, q, group14).Cmp(big.NewInt(1)) != 0 {
-		return nil, errors.New("invalid DH14 public value")
+	if y.Cmp(big.NewInt(1)) <= 0 || y.Cmp(max) >= 0 || new(big.Int).Exp(y, q, d.p).Cmp(big.NewInt(1)) != 0 {
+		return nil, errors.New("invalid MODP public value")
 	}
-	return new(big.Int).Exp(y, d.x, group14).FillBytes(make([]byte, 256)), nil
+	return new(big.Int).Exp(y, d.x, d.p).FillBytes(make([]byte, len(d.Public))), nil
 }
 
 type IKEKeys struct{ SKd, SKai, SKar, SKei, SKer, SKpi, SKpr []byte }

@@ -1,6 +1,7 @@
 package swu
 
 import (
+	"bytes"
 	"crypto"
 	"crypto/ecdsa"
 	"crypto/hmac"
@@ -41,19 +42,30 @@ func sharedAuth(p vc.PRF, key, octets []byte) ([]byte, error) {
 	return p.Sum(k, octets)
 }
 func newBig(b []byte) *big.Int { return new(big.Int).SetBytes(b) }
-func (s *Session) verifyResponder(ps []ikev2.Payload, msk []byte) error {
+
+// IDr is sent in the first response even when RFC 5998 omits its certificate
+// AUTH. Retain it for the final MSK proof; never replace it midway through EAP.
+func (s *Session) rememberResponderIdentity(ps []ikev2.Payload, required bool) ([]byte, error) {
 	id, e := ikev2.One(ps, ikev2.IDr)
 	if e != nil {
-		if _, present := ikev2.Find(ps, ikev2.IDr); !present && len(msk) > 0 && len(s.responderID) > 0 {
-			id = s.responderID
-		} else {
-			return e
+		if _, present := ikev2.Find(ps, ikev2.IDr); !present && !required && len(s.responderID) > 0 {
+			return s.responderID, nil
 		}
-	} else {
-		s.responderID = append([]byte{}, id...)
+		return nil, e
 	}
 	if len(id) < 5 || id[1] != 0 || id[2] != 0 || id[3] != 0 {
-		return errors.New("invalid responder ID")
+		return nil, errors.New("invalid responder ID")
+	}
+	if len(s.responderID) > 0 && !bytes.Equal(s.responderID, id) {
+		return nil, errors.New("responder ID changed during IKE_AUTH")
+	}
+	s.responderID = append([]byte{}, id...)
+	return s.responderID, nil
+}
+func (s *Session) verifyResponder(ps []ikev2.Payload, msk []byte) error {
+	id, e := s.rememberResponderIdentity(ps, len(msk) == 0)
+	if e != nil {
+		return e
 	}
 	auth, e := ikev2.One(ps, ikev2.AUTH)
 	if e != nil {
