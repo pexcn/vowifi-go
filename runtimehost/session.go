@@ -47,7 +47,7 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 		s.LastReason = "child_sa_established"
 	})
 	protected := ipsec3gpp.NewEndpoint(tunnel.InnerPacketEndpoint())
-	network, err := netstack.New(ctx, protected, netstack.Config{LocalAddresses: cfg.Addresses, DNS: cfg.DNS, MTU: 1280})
+	network, err := netstack.New(ctx, protected, netstack.Config{LocalAddresses: cfg.Addresses, DNS: cfg.DNS, MTU: userNetworkMTU})
 	if err != nil {
 		return err
 	}
@@ -83,6 +83,14 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	}
 	if err = applyIMSProfile(&imsCfg, p.EffectiveCarrier.Parameters, &security); err != nil {
 		return err
+	}
+	applyIMSDeviceIdentity(&imsCfg, p.Profile.IMEI)
+	// Detailed SIP diagnostics are opt-in. Leaving the callback nil at normal
+	// log levels also avoids generating the redacted request/response strings.
+	if log := Logger(); log.Core().Enabled(zap.DebugLevel) {
+		imsCfg.OnRegistrationFailure = func(phase string, round int, request, response string) {
+			log.Debug("IMS 注册被拒绝（脱敏 SIP 报文）", zap.String("device_id", req.DeviceID), zap.String("trace_id", req.TraceID), zap.String("phase", phase), zap.Int("round", round), zap.String("sip_request", request), zap.String("sip_response", response))
+		}
 	}
 	imsCfg.InstallSecurity = func(ctx context.Context, a ims.SecurityAgreement) (ims.DialContextFunc, error) {
 		host, _, err := net.SplitHostPort(a.RemoteAddress)
@@ -142,6 +150,11 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	}
 	inst.update(func(s *State) { s.Phase = PhaseIMSRegistering; s.LastReason = "ims_registering" })
 	if err = svc.Start(ctx); err != nil {
+		// A failed packet write can close the stack and cancel IMS first.
+		// Report that original failure instead of only the resulting cancellation.
+		if cause := network.Err(); cause != nil {
+			return fmt.Errorf("IMS: %w (registration ended: %v)", cause, err)
+		}
 		return fmt.Errorf("IMS: %w", err)
 	}
 	inst.mu.Lock()
@@ -151,7 +164,7 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 		s.Phase = PhaseReady
 		s.IMSReady = true
 		s.SMSReady = true
-		s.LastReason = "ims_registered"
+		s.LastReason = PhaseSMSReady
 	})
 	if err = registerVoice(ctx, req, inst, svc, network, localIP); err != nil {
 		return err

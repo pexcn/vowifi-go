@@ -139,7 +139,7 @@ func (n *Network) receive() {
 	for {
 		b, e := n.endpoint.ReadPacket(n.ctx)
 		if e != nil {
-			n.fail(e)
+			n.fail(fmt.Errorf("netstack receive: %w", e))
 			return
 		}
 		p, ok := packetProtocol(b)
@@ -162,7 +162,7 @@ func (n *Network) transmit() {
 		v.Release()
 		pkt.DecRef()
 		if e := n.endpoint.WritePacket(n.ctx, b); e != nil {
-			n.fail(e)
+			n.fail(fmt.Errorf("netstack transmit (packet_length=%d): %w", len(b), e))
 			return
 		}
 	}

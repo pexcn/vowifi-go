@@ -27,8 +27,13 @@ type Config struct {
 	// RegisterHeaders supplements REGISTER with carrier-specific headers.
 	RegisterHeaders              map[string]string
 	UserAgent, ContactParameters string
-	SIM                          sim.AKAProvider
-	DialContext                  DialContextFunc
+	// SIPInstance is an unquoted URN, serialized as a quoted Contact parameter.
+	SIPInstance string
+	// Initial REGISTER carries an empty-response Digest header to request AKA.
+	// Some carrier templates omit algorithm from that initial placeholder only.
+	UsePlainDigestPlaceholder bool
+	SIM                       sim.AKAProvider
+	DialContext               DialContextFunc
 	// These listeners must use the same injected protected tunnel network as DialContext.
 	ListenPacket                           func(context.Context, string, string) (net.PacketConn, error)
 	ListenTCP                              func(context.Context, string, string) (net.Listener, error)
@@ -42,7 +47,10 @@ type Config struct {
 	// AllowUnauthenticated is limited to explicit lab peers. Carrier use defaults to AKA.
 	AllowUnauthenticated bool
 	SecurityClient       *SecurityParameters
-	InstallSecurity      func(context.Context, SecurityAgreement) (DialContextFunc, error)
+	// Additional supported transforms share the primary offer's ports and SPIs.
+	SecurityClientAlternatives []SecurityParameters
+	OnRegistrationFailure      func(phase string, round int, request, response string)
+	InstallSecurity            func(context.Context, SecurityAgreement) (DialContextFunc, error)
 }
 type SentPart struct {
 	PartNo        int
@@ -111,7 +119,7 @@ func token() string {
 }
 func cleanValue(s string) bool { return !strings.ContainsAny(s, "\r\n\x00") }
 func New(c Config) (*Service, error) {
-	for _, s := range []string{c.PrivateIdentity, c.PublicIdentity, c.Realm, c.SMSC, c.LocalAddress, c.UserAgent, c.ContactParameters} {
+	for _, s := range []string{c.PrivateIdentity, c.PublicIdentity, c.Realm, c.SMSC, c.LocalAddress, c.UserAgent, c.ContactParameters, c.SIPInstance} {
 		if !cleanValue(s) {
 			return nil, errors.New("invalid IMS configuration value")
 		}
@@ -121,6 +129,9 @@ func New(c Config) (*Service, error) {
 	}
 	if strings.ContainsAny(c.ContactParameters, "<>") {
 		return nil, errors.New("invalid Contact parameters")
+	}
+	if c.SIPInstance != "" && (!strings.HasPrefix(c.SIPInstance, "urn:") || strings.ContainsAny(c.SIPInstance, "<>\"\\; \t")) {
+		return nil, errors.New("invalid SIP instance URN")
 	}
 	if c.ContactParameters != "" && !strings.HasPrefix(c.ContactParameters, ";") {
 		c.ContactParameters = ";" + c.ContactParameters
@@ -150,6 +161,19 @@ func New(c Config) (*Service, error) {
 			return nil, fmt.Errorf("invalid Security-Client: %w", err)
 		}
 		c.SecurityClient = &p
+	}
+	c.SecurityClientAlternatives = append([]SecurityParameters(nil), c.SecurityClientAlternatives...)
+	for _, p := range c.SecurityClientAlternatives {
+		if c.SecurityClient == nil {
+			return nil, errors.New("Security-Client alternatives require a primary offer")
+		}
+		if _, err := parseSecurity(p.header()); err != nil {
+			return nil, fmt.Errorf("invalid Security-Client alternative: %w", err)
+		}
+		primary := *c.SecurityClient
+		if p.SPIClient != primary.SPIClient || p.SPIServer != primary.SPIServer || p.PortClient != primary.PortClient || p.PortServer != primary.PortServer {
+			return nil, errors.New("Security-Client alternatives must share ports and SPIs")
+		}
 	}
 	if c.PrivateIdentity == "" || c.PublicIdentity == "" || c.Realm == "" || len(c.PCSCF) == 0 {
 		return nil, errors.New("IMS identity, realm and P-CSCF required")
@@ -263,7 +287,7 @@ func (s *Service) connect(ctx context.Context, dial DialContextFunc, addr string
 	if port == "" {
 		port = "5060"
 	}
-	contact := "<sip:" + strings.Split(strings.TrimPrefix(s.cfg.PublicIdentity, "sip:"), "@")[0] + "@" + net.JoinHostPort(host, port) + ";transport=" + s.cfg.Transport + ">" + s.cfg.ContactParameters
+	contact := s.contactFor(net.JoinHostPort(host, port))
 	s.mu.Lock()
 	if s.closed {
 		s.mu.Unlock()
@@ -273,13 +297,21 @@ func (s *Service) connect(ctx context.Context, dial DialContextFunc, addr string
 	s.conn = c
 	s.remote = c.RemoteAddr().String()
 	if s.serverLocal != "" {
-		contact = "<sip:" + strings.Split(strings.TrimPrefix(s.cfg.PublicIdentity, "sip:"), "@")[0] + "@" + s.serverLocal + ";transport=" + s.cfg.Transport + ">" + s.cfg.ContactParameters
+		contact = s.contactFor(s.serverLocal)
 	}
 	s.contact = contact
 	s.wg.Add(1)
 	s.mu.Unlock()
 	go s.readLoop(c, g)
 	return nil
+}
+
+func (s *Service) contactFor(address string) string {
+	contact := "<sip:" + strings.Split(strings.TrimPrefix(s.cfg.PublicIdentity, "sip:"), "@")[0] + "@" + address + ";transport=" + s.cfg.Transport + ">"
+	if s.cfg.SIPInstance != "" {
+		contact += ";+sip.instance=" + strconv.Quote("<"+s.cfg.SIPInstance+">")
+	}
+	return contact + s.cfg.ContactParameters
 }
 func (s *Service) write(m *message) error {
 	b, e := m.bytes()
@@ -420,9 +452,9 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 	for {
 		select {
 		case <-ctx.Done():
-			return nil, ctx.Err()
+			return nil, s.transactionFailure(ctx.Err())
 		case <-serviceCtx.Done():
-			return nil, serviceCtx.Err()
+			return nil, s.transactionFailure(serviceCtx.Err())
 		case <-timeout.C:
 			return nil, errors.New("SIP transaction timeout")
 		case <-retry.C:
@@ -447,6 +479,17 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 		}
 	}
 }
+
+func (s *Service) transactionFailure(err error) error {
+	s.mu.Lock()
+	cause := s.lastErr
+	s.mu.Unlock()
+	if cause != nil {
+		return fmt.Errorf("IMS transport: %w (transaction ended: %v)", cause, err)
+	}
+	return err
+}
+
 func (s *Service) request(method, uri, callID string) *message {
 	m := &message{Start: method + " " + uri + " SIP/2.0", Headers: make(map[string][]string)}
 	s.mu.Lock()
@@ -513,8 +556,25 @@ func (s *Service) register(ctx context.Context) error {
 			m.set(name, value)
 		}
 		if s.cfg.SecurityClient != nil {
-			m.set("security-client", s.cfg.SecurityClient.header())
+			offers := []string{s.cfg.SecurityClient.header()}
+			for _, offer := range s.cfg.SecurityClientAlternatives {
+				offers = append(offers, offer.header())
+			}
+			m.set("security-client", strings.Join(offers, ", "))
 			m.set("require", "sec-agree")
+			m.set("proxy-require", "sec-agree")
+		}
+		s.mu.Lock()
+		haveChallenge := s.auth.Nonce != ""
+		s.mu.Unlock()
+		if !haveChallenge {
+			// TS 24.229 initial registration identifies the private identity and
+			// requests a challenge; this is not a computed authentication response.
+			algorithm := ",algorithm=AKAv1-MD5"
+			if s.cfg.UsePlainDigestPlaceholder {
+				algorithm = ""
+			}
+			m.set("authorization", fmt.Sprintf("Digest uri=%s,username=%s%s,response=\"\",realm=%s,nonce=\"\"", strconv.Quote(uri), strconv.Quote(s.cfg.PrivateIdentity), algorithm, strconv.Quote(s.cfg.Realm)))
 		}
 		if e := s.authorize(m); e != nil {
 			return e
@@ -560,9 +620,10 @@ func (s *Service) register(ctx context.Context) error {
 			if e != nil {
 				return e
 			}
-			if c.Realm != s.cfg.Realm {
-				return errors.New("IMS digest realm differs from configured realm")
-			}
+			// The Digest protection space is supplied by the challenge and may
+			// differ from the IMS home domain used for the REGISTER Request-URI.
+			// Keep cfg.Realm and the prepared IMPI/IMPU unchanged; authHeader
+			// hashes and echoes c.Realm. The challenge must still pass SIM AKA.
 			ar, e := akaPassword(ctx, s.cfg.SIM, c)
 			if e != nil {
 				return e
@@ -588,10 +649,11 @@ func (s *Service) register(ctx context.Context) error {
 					return ErrUnsupportedSecurity
 				}
 				client := *s.cfg.SecurityClient
-				server, e := selectSecurity(raw, client)
+				server, e := selectSecurity(raw, client, s.cfg.SecurityClientAlternatives...)
 				if e != nil {
 					return e
 				}
+				client.Algorithm, client.Encryption = server.Algorithm, server.Encryption
 				dial, e := s.cfg.InstallSecurity(ctx, SecurityAgreement{Client: client, Server: server, CK: append([]byte(nil), ar.CK...), IK: append([]byte(nil), ar.IK...), RemoteAddress: s.remote})
 				if e != nil {
 					return fmt.Errorf("install IMS security: %w", e)
@@ -620,7 +682,17 @@ func (s *Service) register(ctx context.Context) error {
 			}
 			s.cfg.Expires = time.Duration(n) * time.Second
 		default:
-			return fmt.Errorf("IMS REGISTER rejected: %s", r.Start)
+			phase := "initial"
+			if haveChallenge {
+				phase = "authenticated"
+			}
+			if auts != "" {
+				phase = "resynchronization"
+			}
+			if s.cfg.OnRegistrationFailure != nil {
+				s.cfg.OnRegistrationFailure(phase, round+1, registrationDiagnostic(m), registrationDiagnostic(r))
+			}
+			return fmt.Errorf("IMS REGISTER rejected: %s (phase=%s, round=%d, transport=%s)", r.Start, phase, round+1, s.cfg.Transport)
 		}
 	}
 	return errors.New("IMS authentication round limit exceeded")

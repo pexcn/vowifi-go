@@ -71,7 +71,7 @@ func parseSecurity(s string) (SecurityParameters, error) {
 
 // selectSecurity chooses only mechanisms actually offered by this endpoint.
 // Security-Verify still carries the complete original server list (RFC 3329).
-func selectSecurity(raw string, offered SecurityParameters) (SecurityParameters, error) {
+func selectSecurity(raw string, offered SecurityParameters, otherOffers ...SecurityParameters) (SecurityParameters, error) {
 	alternatives, err := splitQuoted(raw, ',')
 	if err != nil {
 		return SecurityParameters{}, err
@@ -83,7 +83,11 @@ func selectSecurity(raw string, offered SecurityParameters) (SecurityParameters,
 		if err != nil {
 			continue
 		}
-		if p.Algorithm != offered.Algorithm || p.Encryption != offered.Encryption {
+		matches := p.Algorithm == offered.Algorithm && p.Encryption == offered.Encryption
+		for _, offer := range otherOffers {
+			matches = matches || p.Algorithm == offer.Algorithm && p.Encryption == offer.Encryption
+		}
+		if !matches {
 			continue
 		}
 		fields, err := splitQuoted(alternative, ';')

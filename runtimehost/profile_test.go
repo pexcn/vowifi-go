@@ -25,6 +25,9 @@ func TestCarrierProfileNegotiatesOnlyAllowedPairedAlgorithms(t *testing.T) {
 		if got.EncryptionKeyBits != tt.bits || got.PRF != vc.PRFSHA256 || got.Integrity != vc.HMACSHA256128 {
 			t.Fatalf("profile changed %+v", got)
 		}
+		if !got.EAPOnlyAuthentication {
+			t.Fatal("SWu carrier profile did not offer RFC 5998 EAP-only authentication")
+		}
 		if !strings.HasPrefix(got.NAI, "0001010123456789@nai.epc.") || got.APN != "ims" {
 			t.Fatalf("NAI/APN: %s %s", got.NAI, got.APN)
 		}
@@ -47,5 +50,22 @@ func TestIMSPolicyPreservesRealmHeadersAndOffer(t *testing.T) {
 	}
 	if cfg.Realm != c.Parameters.IMSRealm || cfg.RegisterHeaders["supported"] != "path,sec-agree,gruu" || cfg.SecurityClient.Algorithm != "hmac-sha-1-96" || cfg.SecurityClient.Encryption != "aes-cbc" {
 		t.Fatalf("carrier IMS settings lost %+v", cfg)
+	}
+}
+
+func TestIMSProfileSelectsInitialDigestVariant(t *testing.T) {
+	for _, tc := range []struct {
+		mcc, mnc string
+		plain    bool
+	}{{"234", "33", false}, {"001", "01", true}} {
+		c := carrier.ResolveEffectiveCarrierConfig(carrier.EffectiveCarrierConfigInput{MCC: tc.mcc, MNC: tc.mnc})
+		cfg := ims.Config{UsePlainDigestPlaceholder: !tc.plain}
+		security := ims.SecurityParameters{SPIClient: 1001, SPIServer: 1002, PortClient: 40000, PortServer: 40001}
+		if err := applyIMSProfile(&cfg, c.Parameters, &security); err != nil {
+			t.Fatal(err)
+		}
+		if cfg.UsePlainDigestPlaceholder != tc.plain {
+			t.Fatalf("%s/%s initial Digest variant ignored", tc.mcc, tc.mnc)
+		}
 	}
 }

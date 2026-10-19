@@ -107,7 +107,12 @@ func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security 
 		cfg.PCSCF = []string{params.IMSPCSCF}
 	}
 	switch params.IMSTransport {
-	case "", "auto", "udp":
+	case "", "auto":
+		// REGISTER with AKA and security headers can exceed a single tunnel
+		// datagram. Prefer TCP for auto so SIP can be segmented without IP
+		// fragmentation (RFC 3261 section 18.1.1).
+		cfg.Transport = "tcp"
+	case "udp":
 		cfg.Transport = "udp"
 	case "tcp":
 		cfg.Transport = "tcp"
@@ -119,6 +124,9 @@ func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security 
 		cfg.KeepAlive = time.Duration(params.IMSTCPKeepaliveSeconds) * time.Second
 	}
 	template := params.IMSRegisterTemplate
+	if template.UsePlainDigestPlaceholder != nil {
+		cfg.UsePlainDigestPlaceholder = *template.UsePlainDigestPlaceholder
+	}
 	headers := map[string]string{}
 	if template.SupportedHeader != "" {
 		headers["supported"] = template.SupportedHeader
@@ -131,26 +139,47 @@ func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security 
 	}
 	cfg.RegisterHeaders = headers
 	// Advertise only capabilities actually implemented by this open stack.
-	cfg.ContactParameters = "+g.3gpp.smsip;audio"
+	cfg.ContactParameters = ""
+	if template.AccessType != "" {
+		cfg.ContactParameters = "+g.3gpp.accesstype=" + strconv.Quote(template.AccessType) + ";"
+	}
+	cfg.ContactParameters += "+g.3gpp.smsip;audio"
 	if template.ICSIReference != "" {
 		cfg.ContactParameters += `; +g.3gpp.icsi-ref="` + template.ICSIReference + `"`
 	}
 	if template.SecAgreeMode == "none" || template.SecAgreeMode == "disabled" {
 		cfg.SecurityClient = nil
+		cfg.SecurityClientAlternatives = nil
 		return nil
 	}
 	mechanisms := template.SecurityClientMechanisms
 	if len(mechanisms) == 0 {
 		cfg.SecurityClient = security
+		cfg.SecurityClientAlternatives = nil
 		return nil
 	}
+	cfg.SecurityClient = nil
+	cfg.SecurityClientAlternatives = nil
+	seen := make(map[string]bool)
 	for _, m := range mechanisms {
 		if (m.Algorithm == "hmac-sha-1-96" || m.Algorithm == "hmac-md5-96") && (m.EncryptionAlgorithm == "aes-cbc" || m.EncryptionAlgorithm == "null") && (m.Protocol == "" || m.Protocol == "esp") && (m.Mode == "" || m.Mode == "trans") {
-			security.Algorithm = m.Algorithm
-			security.Encryption = m.EncryptionAlgorithm
-			cfg.SecurityClient = security
-			return nil
+			key := m.Algorithm + "/" + m.EncryptionAlgorithm
+			if seen[key] {
+				continue
+			}
+			seen[key] = true
+			offer := *security
+			offer.Algorithm, offer.Encryption = m.Algorithm, m.EncryptionAlgorithm
+			if cfg.SecurityClient == nil {
+				*security = offer
+				cfg.SecurityClient = security
+			} else {
+				cfg.SecurityClientAlternatives = append(cfg.SecurityClientAlternatives, offer)
+			}
 		}
+	}
+	if cfg.SecurityClient != nil {
+		return nil
 	}
 	return errors.New("carrier IMS template has no supported ipsec-3gpp mechanism")
 }

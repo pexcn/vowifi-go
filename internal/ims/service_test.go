@@ -426,7 +426,7 @@ func TestRegistrationInstallsSecurityBeforeAuthenticatedRetry(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if m.method() != "REGISTER" || m.get("authorization") == "" || m.get("security-verify") == "" || installs.Load() != 1 {
+		if m.method() != "REGISTER" || m.get("authorization") == "" || m.get("security-verify") == "" || m.get("proxy-require") != "sec-agree" || installs.Load() != 1 {
 			return fmt.Errorf("unprotected authenticated retry %#v", m)
 		}
 		if err = sendPeer(c, response(m, 200, "OK")); err != nil {
@@ -445,7 +445,7 @@ func TestRegistrationInstallsSecurityBeforeAuthenticatedRetry(t *testing.T) {
 		if err != nil {
 			return err
 		}
-		if m.get("security-client") == "" || m.get("require") != "sec-agree" {
+		if m.get("security-client") == "" || m.get("require") != "sec-agree" || m.get("proxy-require") != "sec-agree" {
 			return errors.New("missing security offer")
 		}
 		challenge := response(m, 401, "Unauthorized")
