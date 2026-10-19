@@ -54,18 +54,22 @@ func retryAfterValue(value string) time.Duration {
 // A successful response removing our binding must never publish readiness.
 func registrationExpiry(response *message, contact string, fallback time.Duration) (time.Duration, error) {
 	value := strings.TrimSpace(response.get("expires"))
+	wantURI, _, err := contactBindingParts(contact)
+	if err != nil {
+		return 0, err
+	}
 	for _, header := range response.Headers["contact"] {
 		entries, err := splitQuoted(header, ',')
 		if err != nil {
 			return 0, err
 		}
 		for _, entry := range entries {
-			if sipURI(entry) != sipURI(contact) {
-				continue
+			uri, params, err := contactBindingParts(entry)
+			if err != nil {
+				return 0, err
 			}
-			params := entry
-			if end := strings.LastIndexByte(entry, '>'); end >= 0 {
-				params = entry[end+1:]
+			if uri != wantURI {
+				continue
 			}
 			fields, err := parameters(params, ';')
 			if err != nil {
@@ -84,6 +88,39 @@ func registrationExpiry(response *message, contact string, fallback time.Duratio
 		return 0, errors.New("IMS REGISTER returned no valid binding lifetime")
 	}
 	return time.Duration(seconds) * time.Second, nil
+}
+
+// Locate the actual name-addr, skipping a quoted display name. A Contact can
+// contain further angle brackets inside quoted header parameters, notably
+// +sip.instance="<urn:...>"; those are not the end of the SIP address.
+func contactBindingParts(value string) (uri, params string, err error) {
+	quoted, escaped := false, false
+	for i := 0; i < len(value); i++ {
+		c := value[i]
+		if escaped {
+			escaped = false
+			continue
+		}
+		if quoted && c == '\\' {
+			escaped = true
+			continue
+		}
+		if c == '"' {
+			quoted = !quoted
+		}
+		if !quoted && c == '<' {
+			end := strings.IndexByte(value[i+1:], '>')
+			if end < 0 {
+				return "", "", errors.New("unterminated Contact address")
+			}
+			return strings.TrimSpace(value[i+1 : i+1+end]), value[i+end+2:], nil
+		}
+	}
+	if quoted || escaped {
+		return "", "", errors.New("unterminated Contact display name")
+	}
+	uri, params, _ = strings.Cut(value, ";")
+	return strings.TrimSpace(uri), params, nil
 }
 
 func containsCode(codes []int, code int) bool {

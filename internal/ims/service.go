@@ -749,7 +749,7 @@ func (s *Service) register(ctx context.Context) error {
 			s.mu.Unlock()
 			expires, e = registrationExpiry(r, m.get("contact"), expires)
 			if e != nil {
-				return e
+				return fmt.Errorf("IMS REGISTER Contact/Expires: %w", e)
 			}
 			s.mu.Lock()
 			s.cfg.Expires = expires
@@ -765,7 +765,7 @@ func (s *Service) register(ctx context.Context) error {
 			}
 			c, e := parseChallenge(r.get(h))
 			if e != nil {
-				return e
+				return fmt.Errorf("IMS REGISTER %s challenge: %w", h, e)
 			}
 			// The Digest protection space is supplied by the challenge and may
 			// differ from the IMS home domain used for the REGISTER Request-URI.
@@ -798,7 +798,7 @@ func (s *Service) register(ctx context.Context) error {
 				client := *s.cfg.SecurityClient
 				server, e := selectSecurity(raw, client, s.cfg.SecurityClientAlternatives...)
 				if e != nil {
-					return e
+					return fmt.Errorf("IMS REGISTER Security-Server: %w", e)
 				}
 				client.Algorithm, client.Encryption = server.Algorithm, server.Encryption
 				dial, e := s.cfg.InstallSecurity(ctx, SecurityAgreement{Client: client, Server: server, CK: append([]byte(nil), ar.CK...), IK: append([]byte(nil), ar.IK...), RemoteAddress: s.remote})

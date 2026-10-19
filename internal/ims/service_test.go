@@ -429,7 +429,9 @@ func TestRegistrationInstallsSecurityBeforeAuthenticatedRetry(t *testing.T) {
 		if m.method() != "REGISTER" || m.get("authorization") == "" || m.get("security-verify") == "" || m.get("proxy-require") != "sec-agree" || installs.Load() != 1 {
 			return fmt.Errorf("unprotected authenticated retry %#v", m)
 		}
-		if err = sendPeer(c, response(m, 200, "OK")); err != nil {
+		ok := response(m, 200, "OK")
+		ok.set("contact", m.get("contact")+";expires=120")
+		if err = sendPeer(c, ok); err != nil {
 			return err
 		}
 		_, _ = readMessage(r)
@@ -474,6 +476,7 @@ func TestRegistrationInstallsSecurityBeforeAuthenticatedRetry(t *testing.T) {
 		return listener, nil
 	}
 	cfg.SecurityClient = &SecurityParameters{Algorithm: "hmac-sha-1-96", Encryption: "aes-cbc", SPIClient: 200, SPIServer: 201, PortClient: 5070, PortServer: serverPort}
+	cfg.SIPInstance = "urn:gsma:imei:12345678-123456-0"
 	cfg.InstallSecurity = func(_ context.Context, a SecurityAgreement) (DialContextFunc, error) {
 		if len(a.CK) != 16 || len(a.IK) != 16 || a.Server.SPIClient != 400 || a.Client.SPIClient != 200 || a.RemoteAddress == "" {
 			return nil, errors.New("bad AKA security material")
