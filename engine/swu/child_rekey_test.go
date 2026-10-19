@@ -460,10 +460,10 @@ func TestChildRekeyTimerAndKeepaliveContinue(t *testing.T) {
 
 func completeInheritedPFSRekey(t *testing.T, p *mockPeer, s *Session) uint32 {
 	t.Helper()
-	oldPeer := s.out.SPI()
+	oldLocal, oldPeer := s.in.SPI(), s.out.SPI()
 	done := make(chan error, 1)
 	go func() { done <- s.rekeyChild(s.ctx) }()
-	request, _ := readRekeyControl(t, p)
+	request, requestWire := readRekeyControl(t, p)
 	proposals, err := ikev2.ParseProposals(requirePayload(t, request, ikev2.SA))
 	if err != nil {
 		t.Fatal(err)
@@ -494,9 +494,21 @@ func completeInheritedPFSRekey(t *testing.T, p *mockPeer, s *Session) uint32 {
 	if err = p.response(request.Header, ps); err != nil {
 		t.Fatal(err)
 	}
-	deletion, _ := readRekeyControl(t, p)
-	if deletion.Header.Exchange != ikev2.Informational {
-		t.Fatal("PFS rekey did not switch SA")
+	deletion, wire := readRekeyControl(t, p)
+	// DH14 work can outlast the mock's 20 ms retransmission timer. Requests
+	// already queued before our response must retain the same sealed bytes;
+	// consume those duplicates before expecting the subsequent Delete.
+	for retries := 0; bytes.Equal(wire, requestWire); retries++ {
+		if retries >= p.cfg.Retransmits {
+			t.Fatal("PFS rekey exceeded configured retransmissions")
+		}
+		deletion, wire = readRekeyControl(t, p)
+	}
+	if deletion.Header.Exchange != ikev2.Informational || deletion.Header.MessageID != request.Header.MessageID+1 {
+		t.Fatalf("PFS rekey follow-up: exchange=%d messageID=%d, want INFORMATIONAL messageID=%d", deletion.Header.Exchange, deletion.Header.MessageID, request.Header.MessageID+1)
+	}
+	if !bytes.Equal(requirePayload(t, deletion, ikev2.Delete), childDelete(oldLocal).Data) {
+		t.Fatal("PFS rekey deleted the wrong old SA")
 	}
 	if err = p.response(deletion.Header, []ikev2.Payload{childDelete(oldPeer)}); err != nil {
 		t.Fatal(err)
