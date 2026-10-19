@@ -2,6 +2,7 @@ package crypto
 
 import (
 	"bytes"
+	"crypto/sha256"
 	"encoding/hex"
 	"testing"
 )
@@ -70,5 +71,38 @@ func TestPRFPlusBoundaries(t *testing.T) {
 	t2, _ := PRFSHA256.Sum(key, append(append(append([]byte{}, t1...), seed...), 2))
 	if !bytes.Equal(b[:32], t1) || !bytes.Equal(b[32:64], t2) {
 		t.Fatal("PRF+ chaining")
+	}
+}
+
+func TestIKERekeyDerivationVectors(t *testing.T) {
+	// Fixed vectors generated independently with Python's hmac/hashlib and
+	// struct.pack('>QQ', SPIi, SPIr), following RFC 7296 2.18.
+	for _, v := range []struct {
+		p      PRF
+		a      Integrity
+		enc    int
+		digest string
+	}{
+		{PRFSHA1, HMACSHA196, 16, "450c57ffb66dc5659145bc4fc57b1663f4ed78cac1d9dcf8acdbebf2e7ce3e39"},
+		{PRFSHA256, HMACSHA256128, 32, "a013483af58aea19d4718d3143a90d5c6a7dbff956339723cf7a117c4ed692a8"},
+	} {
+		old, ni, nr, shared := bytes.Repeat([]byte{0x11}, v.p.Size()), bytes.Repeat([]byte{0x33}, 32), bytes.Repeat([]byte{0x44}, 32), bytes.Repeat([]byte{0x22}, 128)
+		k, err := DeriveIKERekey(v.p, v.a, v.enc, old, ni, nr, shared, 0x0102030405060708, 0x1112131415161718)
+		if err != nil {
+			t.Fatal(err)
+		}
+		var material []byte
+		for _, part := range [][]byte{k.SKd, k.SKai, k.SKar, k.SKei, k.SKer, k.SKpi, k.SKpr} {
+			material = append(material, part...)
+		}
+		digest := sha256.Sum256(material)
+		if hex.EncodeToString(digest[:]) != v.digest {
+			t.Fatalf("PRF %d: %x", v.p, digest)
+		}
+		old[0] ^= 1
+		changed, err := DeriveIKERekey(v.p, v.a, v.enc, old, ni, nr, shared, 0x0102030405060708, 0x1112131415161718)
+		if err != nil || bytes.Equal(k.SKd, changed.SKd) {
+			t.Fatal("old SK_d did not bind rekey keys", err)
+		}
 	}
 }

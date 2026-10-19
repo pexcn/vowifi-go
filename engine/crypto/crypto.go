@@ -214,18 +214,39 @@ func DeriveIKE(p PRF, integ Integrity, encLen int, ni, nr, shared []byte, spii, 
 		return z, errors.New("invalid IKE key derivation parameters")
 	}
 	nonce := append(append([]byte{}, ni...), nr...)
-	seed := append([]byte{}, nonce...)
+	skeyseed, err := p.Sum(nonce, shared)
+	if err != nil {
+		return z, err
+	}
+	return expandIKE(p, integ, encLen, ni, nr, skeyseed, spii, spir)
+}
+
+// DeriveIKERekey implements RFC 7296 2.18. The previous SK_d, rather than
+// Ni|Nr, keys the SKEYSEED PRF; rekey never repeats EAP or IKE_AUTH.
+func DeriveIKERekey(p PRF, integ Integrity, encLen int, oldSKd, ni, nr, shared []byte, spii, spir uint64) (IKEKeys, error) {
+	if len(oldSKd) != p.Size() || p.Size() == 0 || len(ni) < 16 || len(ni) > 256 || len(nr) < 16 || len(nr) > 256 || len(shared) == 0 || spii == 0 || spir == 0 || integ.KeyLen() == 0 || (encLen != 16 && encLen != 24 && encLen != 32) {
+		return IKEKeys{}, errors.New("invalid IKE rekey derivation parameters")
+	}
+	seed := append(append(append([]byte{}, shared...), ni...), nr...)
+	skeyseed, err := p.Sum(oldSKd, seed)
+	if err != nil {
+		return IKEKeys{}, err
+	}
+	return expandIKE(p, integ, encLen, ni, nr, skeyseed, spii, spir)
+}
+
+func expandIKE(p PRF, integ Integrity, encLen int, ni, nr, skeyseed []byte, spii, spir uint64) (IKEKeys, error) {
+	defer clear(skeyseed)
+	var z IKEKeys
+	seed := append(append([]byte{}, ni...), nr...)
 	seed = binary.BigEndian.AppendUint64(seed, spii)
 	seed = binary.BigEndian.AppendUint64(seed, spir)
-	skeyseed, e := p.Sum(nonce, shared)
-	if e != nil {
-		return z, e
-	}
 	n := 3*p.Size() + 2*integ.KeyLen() + 2*encLen
 	material, e := p.Plus(skeyseed, seed, n)
 	if e != nil {
 		return z, e
 	}
+	defer clear(material)
 	take := func(n int) []byte { b := append([]byte{}, material[:n]...); material = material[n:]; return b }
 	z = IKEKeys{take(p.Size()), take(integ.KeyLen()), take(integ.KeyLen()), take(encLen), take(encLen), take(p.Size()), take(p.Size())}
 	return z, nil

@@ -490,6 +490,9 @@ func (p *mockPeer) handshake() error {
 	if p.mode == "eap-only-changed-id" {
 		ps = append(ps, ikev2.Payload{Type: ikev2.IDr, Data: append([]byte{2, 0, 0, 0}, []byte("changed.test")...)})
 	}
+	if p.mode == "auth-lifetime" {
+		ps = append(ps, ikev2.Notification(16403, []byte{0, 0, 0, 30}))
+	}
 	material, e := vc.PRFSHA256.Plus(p.keys.SKd, append(append([]byte{}, p.ni...), p.nr...), 96)
 	if e != nil {
 		return e

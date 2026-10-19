@@ -105,7 +105,7 @@ func (s *Session) newChildMaterial() (uint32, []byte, error) {
 // responder initiates the Child SA rekey. It does not reuse IKE_AUTH nonces.
 func (s *Session) deriveChildPair(localSPI, peerSPI uint32, ni, nr, shared []byte, initiator bool) (*childPair, error) {
 	seed := append(append(append([]byte{}, shared...), ni...), nr...)
-	material, err := s.prf.Plus(s.keys.SKd, seed, 2*(s.encLen+s.integ.KeyLen()))
+	material, err := s.prf.Plus(s.currentIKE().keys.SKd, seed, 2*(s.encLen+s.integ.KeyLen()))
 	if err != nil {
 		return nil, err
 	}

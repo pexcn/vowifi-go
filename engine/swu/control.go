@@ -91,66 +91,87 @@ func (s *Session) readLoop() {
 			continue
 		}
 		b := packet[4:]
-		m, e := ikev2.Open(b, s.keys.SKer, s.keys.SKar, s.integ)
+		h, e := ikev2.ParseHeader(b)
 		if e != nil {
 			continue
 		}
-		if m.Header.InitiatorSPI != s.spii || m.Header.ResponderSPI != s.spir || m.Header.Flags&ikev2.FlagInitiator != 0 {
+		association, retired := s.ikeForHeader(h)
+		if association == nil {
+			continue
+		}
+		enc, auth := association.inboundKeys()
+		m, e := ikev2.Open(b, enc, auth, s.integ)
+		if e != nil {
+			continue
+		}
+		if m.Header.Flags&ikev2.FlagInitiator != association.peerFlags(false) {
 			continue
 		}
 		flags := m.Header.Flags & (ikev2.FlagInitiator | ikev2.FlagResponse)
-		if flags == ikev2.FlagResponse {
+		if flags == association.peerFlags(true) {
 			select {
 			case s.responses <- append([]byte{}, b...):
 			default:
 			}
 			continue
 		}
-		if flags != 0 {
+		if flags != association.peerFlags(false) {
 			continue
 		}
-		if s.havePeerID && m.Header.MessageID == s.lastPeerID {
-			if s.lastPeerReply != nil && bytes.Equal(b, s.lastPeerRequest) {
-				_ = s.ikeSend(s.ctx, s.lastPeerReply)
+		if association.havePeerID && m.Header.MessageID == association.lastPeerID {
+			if association.lastPeerReply != nil && bytes.Equal(b, association.lastPeerRequest) {
+				_ = s.ikeSend(s.ctx, association.lastPeerReply)
 			}
 			continue
 		}
 		expected := uint32(0)
-		if s.havePeerID {
-			expected = s.lastPeerID + 1
+		if association.havePeerID {
+			expected = association.lastPeerID + 1
 		}
 		if m.Header.MessageID != expected {
 			continue
 		}
-		if e := s.answerPeerRequest(m, b); e != nil {
+		if e := s.answerPeerRequest(association, retired, m, b); e != nil {
 			s.fail(e)
 			return
 		}
 	}
 }
 
-func (s *Session) answerPeerRequest(m ikev2.Message, raw []byte) error {
+func (s *Session) answerPeerRequest(association *ikeAssociation, retired bool, m ikev2.Message, raw []byte) error {
 	var reply []ikev2.Payload
 	var pair *childPair
+	var nextIKE *ikeAssociation
 	closeAfter := false
 	switch m.Header.Exchange {
 	case ikev2.Informational:
+		// Hold the association choice through the reply: a concurrent local
+		// rekey must not turn an old-IKE Delete into an active-SA teardown.
+		s.ikeStateMu.RLock()
+		defer s.ikeStateMu.RUnlock()
+		retired = association != s.activeIKE
 		var err error
-		reply, closeAfter, err = s.peerInformational(m.Payloads)
+		if retired {
+			reply, err = retiredInformational(m.Payloads)
+		} else {
+			reply, closeAfter, err = s.peerInformational(m.Payloads)
+		}
 		if err != nil {
 			reply = []ikev2.Payload{ikev2.Notification(7, nil)}
 		}
 	case ikev2.CreateChildSA:
-		if !s.rekeyMu.TryLock() {
+		if retired {
+			reply = []ikev2.Payload{ikev2.Notification(temporaryFailureNotify, nil)}
+		} else if !s.rekeyMu.TryLock() {
 			reply = []ikev2.Payload{ikev2.Notification(temporaryFailureNotify, nil)}
 		} else {
 			defer s.rekeyMu.Unlock()
-			// IKE SA rekey remains a separate phase. Never interpret its
-			// eight-byte SPI proposal as an ESP replacement.
-			if sa, err := ikev2.One(m.Payloads, ikev2.SA); err == nil {
-				if proposals, err := ikev2.ParseProposals(sa); err == nil && len(proposals) == 1 && proposals[0].Protocol == 1 {
-					reply = []ikev2.Payload{ikev2.Notification(17, nil)}
-					closeAfter = true
+			if association != s.currentIKE() {
+				reply = []ikev2.Payload{ikev2.Notification(temporaryFailureNotify, nil)}
+			}
+			if sa, err := ikev2.One(m.Payloads, ikev2.SA); reply == nil && err == nil {
+				if proposals, err := ikev2.ParseProposals(sa); err == nil && len(proposals) > 0 && proposals[0].Protocol == 1 {
+					reply, nextIKE = s.preparePeerIKE(m.Payloads)
 				}
 			}
 			if reply == nil {
@@ -160,21 +181,25 @@ func (s *Session) answerPeerRequest(m ikev2.Message, raw []byte) error {
 	default:
 		reply = []ikev2.Payload{ikev2.Notification(7, nil)}
 	}
-	h := s.header(m.Header.Exchange, m.Header.MessageID)
-	h.Flags |= ikev2.FlagResponse
-	wire, err := ikev2.Seal(h, reply, s.keys.SKei, s.keys.SKai, s.integ, s.cfg.Random)
+	h := association.header(m.Header.Exchange, m.Header.MessageID, true)
+	enc, auth := association.outboundKeys()
+	wire, err := ikev2.Seal(h, reply, enc, auth, s.integ, s.cfg.Random)
 	if err != nil {
 		return err
 	}
-	s.lastPeerID, s.havePeerID, s.lastPeerReply = m.Header.MessageID, true, wire
-	s.lastPeerRequest = append([]byte{}, raw...)
+	association.lastPeerID, association.havePeerID, association.lastPeerReply = m.Header.MessageID, true, wire
+	association.lastPeerRequest = append([]byte{}, raw...)
 	if err = s.ikeSend(s.ctx, wire); err != nil {
 		return err
 	}
 	if pair != nil {
 		s.activateChild(pair)
 	}
+	if nextIKE != nil {
+		s.activateIKE(nextIKE)
+	}
 	if closeAfter {
+		s.fail(ErrRekeyRequired)
 		return ErrRekeyRequired
 	}
 	return nil
@@ -260,16 +285,21 @@ func (s *Session) controlExchange(ps []ikev2.Payload) error {
 // The read loop remains the sole socket reader and routes authenticated
 // responses here. Retransmissions reuse the original sealed bytes and ID.
 func (s *Session) establishedExchangeLocked(ctx context.Context, exchange byte, ps []ikev2.Payload) (ikev2.Message, error) {
+	return s.exchangeOnIKELocked(ctx, s.currentIKE(), exchange, ps)
+}
+
+func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssociation, exchange byte, ps []ikev2.Payload) (ikev2.Message, error) {
 	var empty ikev2.Message
 	if err := ctx.Err(); err != nil {
 		return empty, err
 	}
-	id := s.nextID
+	id := association.nextID
 	if id == ^uint32(0) {
 		return empty, ErrRekeyRequired
 	}
-	s.nextID++
-	b, err := ikev2.Seal(s.header(exchange, id), ps, s.keys.SKei, s.keys.SKai, s.integ, s.cfg.Random)
+	association.nextID++
+	enc, auth := association.outboundKeys()
+	b, err := ikev2.Seal(association.header(exchange, id, false), ps, enc, auth, s.integ, s.cfg.Random)
 	if err != nil {
 		return empty, err
 	}
@@ -286,8 +316,9 @@ func (s *Session) establishedExchangeLocked(ctx context.Context, exchange byte, 
 			case <-timer.C:
 				goto retry
 			case raw := <-s.responses:
-				m, err := ikev2.Open(raw, s.keys.SKer, s.keys.SKar, s.integ)
-				if err == nil && m.Header.InitiatorSPI == s.spii && m.Header.ResponderSPI == s.spir && m.Header.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) == ikev2.FlagResponse && m.Header.Exchange == exchange && m.Header.MessageID == id {
+				enc, auth := association.inboundKeys()
+				m, err := ikev2.Open(raw, enc, auth, s.integ)
+				if err == nil && m.Header.InitiatorSPI == association.spii && m.Header.ResponderSPI == association.spir && m.Header.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) == association.peerFlags(true) && m.Header.Exchange == exchange && m.Header.MessageID == id {
 					timer.Stop()
 					return m, nil
 				}
@@ -338,6 +369,9 @@ func (s *Session) maintain() {
 			s.childMu.Lock()
 			s.pruneChildrenLocked(time.Now())
 			s.childMu.Unlock()
+			s.ikeStateMu.Lock()
+			s.pruneIKELocked(time.Now())
+			s.ikeStateMu.Unlock()
 		case <-s.childReset:
 			failures = 0
 			timer.Reset(s.rekeyDelay(time.Until(s.childDeadline()) - s.cfg.ChildLifetime/5))

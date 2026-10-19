@@ -88,10 +88,6 @@ type Session struct {
 	encLen                                             int
 	nextID                                             uint32
 	childSPI                                           uint32
-	lastPeerID                                         uint32
-	havePeerID                                         bool
-	lastPeerReply                                      []byte
-	lastPeerRequest                                    []byte
 	ikeMu                                              sync.Mutex
 	encapsulated                                       bool
 	initialPeers                                       map[string]bool
@@ -99,11 +95,16 @@ type Session struct {
 	keyExchangeGroup                                   uint16
 	keRetries                                          int
 	// childMu spans outbound writes to serialize them with SA replacement.
-	childMu         sync.RWMutex
-	retiredChildren map[uint32]retiredChild
-	childCreated    time.Time
-	childReset      chan struct{}
-	rekeyMu         sync.Mutex
+	childMu               sync.RWMutex
+	retiredChildren       map[uint32]retiredChild
+	childCreated          time.Time
+	childReset            chan struct{}
+	authDeadline          time.Time
+	ikeStateMu            sync.RWMutex
+	activeIKE, retiredIKE *ikeAssociation
+	retiredIKEUntil       time.Time
+	ikeReset              chan struct{}
+	rekeyMu               sync.Mutex
 }
 
 func Start(ctx context.Context, c Config) (*Session, error) {
@@ -198,7 +199,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		c.ServerName = host
 	}
 	childCtx, cancel := context.WithCancel(ctx)
-	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), childReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
+	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), childReset: make(chan struct{}, 1), ikeReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
 	s.ikeProfiles, s.keyExchangeGroup = profiles, c.DHGroup
 	_, port, _ := net.SplitHostPort(remote)
 	s.encapsulated = port == "4500"
@@ -253,9 +254,12 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		s.fail(err)
 		return nil, err
 	}
+	s.activeIKE = &ikeAssociation{spii: s.spii, spir: s.spir, keys: s.keys, localInitiator: true, nextID: s.nextID, created: time.Now()}
+	s.keys = vc.IKEKeys{} // The active association now owns the authenticated key material.
 	go s.readLoop()
 	go s.maintain()
 	go s.keepaliveLoop()
+	go s.maintainIKE()
 	return s, nil
 }
 func Dial(ctx context.Context, c Config) (*Session, error) { return Start(ctx, c) }
@@ -876,6 +880,21 @@ func (s *Session) establishChild(ps []ikev2.Payload) error {
 	s.in, e = ipsec.NewSA(ipsec.SAConfig{SPI: s.childSPI, EncryptionKey: inEnc, IntegrityKey: inAuth, Integrity: s.integ})
 	if e != nil {
 		return e
+	}
+	for _, payload := range ps {
+		if payload.Type != ikev2.Notify {
+			continue
+		}
+		code, data, err := ikev2.ParseNotification(payload.Data)
+		if err != nil {
+			return err
+		}
+		if code == 16403 {
+			if payload.Data[0] != 0 || payload.Data[1] != 0 || len(data) != 4 {
+				return errors.New("invalid AUTH_LIFETIME notification")
+			}
+			s.authDeadline = time.Now().Add(time.Duration(binary.BigEndian.Uint32(data)) * time.Second)
+		}
 	}
 	s.configuration = configuration
 	s.childCreated = time.Now()
