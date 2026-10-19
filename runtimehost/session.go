@@ -12,12 +12,12 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pexcn/vowifi-go/engine/swu"
-	"github.com/pexcn/vowifi-go/internal/ims"
-	"github.com/pexcn/vowifi-go/internal/ipsec3gpp"
-	"github.com/pexcn/vowifi-go/internal/netstack"
-	"github.com/pexcn/vowifi-go/runtimehost/eventhost"
-	"github.com/pexcn/vowifi-go/runtimehost/messaging"
+	"github.com/iniwex5/vowifi-go/engine/swu"
+	"github.com/iniwex5/vowifi-go/internal/ims"
+	"github.com/iniwex5/vowifi-go/internal/ipsec3gpp"
+	"github.com/iniwex5/vowifi-go/internal/netstack"
+	"github.com/iniwex5/vowifi-go/runtimehost/eventhost"
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
 	"go.uber.org/zap"
 )
 

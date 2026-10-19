@@ -7,7 +7,7 @@ import (
 	"unicode"
 	"unicode/utf8"
 
-	"github.com/pexcn/vowifi-go/runtimehost/carrier"
+	"github.com/iniwex5/vowifi-go/runtimehost/carrier"
 )
 
 const (

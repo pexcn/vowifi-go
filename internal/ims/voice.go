@@ -11,8 +11,8 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pexcn/vowifi-go/internal/voice/media"
-	"github.com/pexcn/vowifi-go/runtimehost/voicehost"
+	"github.com/iniwex5/vowifi-go/internal/voice/media"
+	"github.com/iniwex5/vowifi-go/runtimehost/voicehost"
 )
 
 type VoiceConfig struct {

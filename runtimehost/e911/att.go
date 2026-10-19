@@ -11,7 +11,7 @@ import (
 	"strings"
 	"sync/atomic"
 
-	"github.com/pexcn/vowifi-go/engine/eap"
+	"github.com/iniwex5/vowifi-go/engine/eap"
 )
 
 var requestSequence atomic.Uint64

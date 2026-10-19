@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 
-	"github.com/pexcn/vowifi-go/engine/ipsec"
+	"github.com/iniwex5/vowifi-go/engine/ipsec"
 )
 
 var errNoInitialResponse = errors.New("IKE_SA_INIT received no response")

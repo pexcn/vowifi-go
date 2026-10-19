@@ -37,11 +37,15 @@ SIM/APDU 与 modem 仍由 VoHive 宿主拥有。SWu 的 EAP-AKA 与 IMS 的 AKA 
 
 ## 作为 Go 模块使用
 
-```bash
-go get github.com/pexcn/vowifi-go@v0.1.0
+本仓库保留 `github.com/iniwex5/vowifi-go` 模块路径及包导入路径，便于现有宿主通过 Go `replace` 接入：
+
+```go
+replace github.com/iniwex5/vowifi-go => github.com/pexcn/vowifi-go v0.1.1
 ```
 
-宿主使用 `github.com/pexcn/vowifi-go/runtimehost` 等包。迁移原版兼容路径时，需要同步更新 Go import 和 `go.mod`；不应在同一进程同时引入两个路径下的模块。
+宿主已有的 `require github.com/iniwex5/vowifi-go v1.1.2` 和 Go import 无需修改。
+
+宿主继续使用 `github.com/iniwex5/vowifi-go/runtimehost` 等包。模块的实际源码由上述 `replace` 从本仓库取得；不应同时直接依赖 `github.com/pexcn/vowifi-go`，以免引入两套包类型。
 
 ## 使用和验证
 
@@ -59,7 +63,7 @@ go vet ./...
 开发时可在 VoHive 根目录使用本地替换：
 
 ```bash
-go mod edit -replace=github.com/pexcn/vowifi-go=../vowifi-go
+go mod edit -replace=github.com/iniwex5/vowifi-go=../vowifi-go
 ```
 
 此命令假定两个仓库位于同级目录；发布接入应固定新仓库的 tag 或提交版本。

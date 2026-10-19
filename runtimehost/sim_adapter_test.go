@@ -4,7 +4,7 @@ import (
 	"errors"
 	"testing"
 
-	"github.com/pexcn/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/engine/sim"
 )
 
 type selectionProvider struct {

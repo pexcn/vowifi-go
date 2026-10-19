@@ -6,7 +6,7 @@ import (
 	"encoding/binary"
 	"errors"
 	"fmt"
-	vc "github.com/pexcn/vowifi-go/engine/crypto"
+	vc "github.com/iniwex5/vowifi-go/engine/crypto"
 	"io"
 	"sync"
 )

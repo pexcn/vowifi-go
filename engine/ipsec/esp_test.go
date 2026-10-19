@@ -3,7 +3,7 @@ package ipsec
 import (
 	"bytes"
 	"errors"
-	vc "github.com/pexcn/vowifi-go/engine/crypto"
+	vc "github.com/iniwex5/vowifi-go/engine/crypto"
 	"testing"
 )
 

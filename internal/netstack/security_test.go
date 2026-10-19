@@ -10,7 +10,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pexcn/vowifi-go/internal/ipsec3gpp"
+	"github.com/iniwex5/vowifi-go/internal/ipsec3gpp"
 )
 
 type auditedEndpoint struct {

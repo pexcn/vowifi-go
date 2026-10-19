@@ -12,7 +12,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/pexcn/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/engine/sim"
 	smscodec "github.com/warthog618/sms"
 	"github.com/warthog618/sms/encoding/tpdu"
 )

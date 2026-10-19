@@ -8,7 +8,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
-	"github.com/pexcn/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/engine/sim"
 	"math/big"
 	"testing"
 )

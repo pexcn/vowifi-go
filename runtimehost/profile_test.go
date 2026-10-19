@@ -4,10 +4,10 @@ import (
 	"strings"
 	"testing"
 
-	vc "github.com/pexcn/vowifi-go/engine/crypto"
-	"github.com/pexcn/vowifi-go/internal/ims"
-	"github.com/pexcn/vowifi-go/runtimehost/carrier"
-	"github.com/pexcn/vowifi-go/runtimehost/identity"
+	vc "github.com/iniwex5/vowifi-go/engine/crypto"
+	"github.com/iniwex5/vowifi-go/internal/ims"
+	"github.com/iniwex5/vowifi-go/runtimehost/carrier"
+	"github.com/iniwex5/vowifi-go/runtimehost/identity"
 )
 
 func TestCarrierProfileNegotiatesOnlyAllowedPairedAlgorithms(t *testing.T) {

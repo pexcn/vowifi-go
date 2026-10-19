@@ -11,11 +11,11 @@ import (
 
 	"time"
 
-	swusim "github.com/pexcn/vowifi-go/engine/sim"
-	"github.com/pexcn/vowifi-go/runtimehost/eventhost"
-	"github.com/pexcn/vowifi-go/runtimehost/identity"
-	"github.com/pexcn/vowifi-go/runtimehost/messaging"
-	"github.com/pexcn/vowifi-go/runtimehost/voicehost"
+	swusim "github.com/iniwex5/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/runtimehost/eventhost"
+	"github.com/iniwex5/vowifi-go/runtimehost/identity"
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
+	"github.com/iniwex5/vowifi-go/runtimehost/voicehost"
 )
 
 const (

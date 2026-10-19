@@ -8,10 +8,10 @@ import (
 	"strings"
 	"time"
 
-	vc "github.com/pexcn/vowifi-go/engine/crypto"
-	"github.com/pexcn/vowifi-go/engine/swu"
-	"github.com/pexcn/vowifi-go/internal/ims"
-	"github.com/pexcn/vowifi-go/runtimehost/carrier"
+	vc "github.com/iniwex5/vowifi-go/engine/crypto"
+	"github.com/iniwex5/vowifi-go/engine/swu"
+	"github.com/iniwex5/vowifi-go/internal/ims"
+	"github.com/iniwex5/vowifi-go/runtimehost/carrier"
 )
 
 const (

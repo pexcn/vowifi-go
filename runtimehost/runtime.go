@@ -9,10 +9,10 @@ import (
 	"sync"
 	"time"
 
-	"github.com/pexcn/vowifi-go/runtimehost/carrier"
-	"github.com/pexcn/vowifi-go/runtimehost/eventhost"
-	"github.com/pexcn/vowifi-go/runtimehost/identity"
-	"github.com/pexcn/vowifi-go/runtimehost/messaging"
+	"github.com/iniwex5/vowifi-go/runtimehost/carrier"
+	"github.com/iniwex5/vowifi-go/runtimehost/eventhost"
+	"github.com/iniwex5/vowifi-go/runtimehost/identity"
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
 )
 
 const PhaseStopped = "stopped"
