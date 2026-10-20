@@ -53,6 +53,9 @@ func (c *mappedUDP) SetPeer(peer string) error {
 	return c.DatagramConn.(ipsec.PeerSwitcher).SetPeer(c.natt)
 }
 func (c *mappedUDP) Close() error { c.closed.Store(true); return c.DatagramConn.Close() }
+func (c *mappedUDP) LocalAddr() net.Addr {
+	return c.DatagramConn.(interface{ LocalAddr() net.Addr }).LocalAddr()
+}
 
 type mockPeer struct {
 	t                                *testing.T
@@ -601,6 +604,9 @@ func (p *mockPeer) handshake() error {
 	}
 	if p.mode == "auth-lifetime" {
 		ps = append(ps, ikev2.Notification(16403, []byte{0, 0, 0, 30}))
+	}
+	if strings.HasPrefix(p.mode, "mobike") {
+		ps = append(ps, ikev2.Notification(mobikeSupportedNotify, nil))
 	}
 	suite := p.protection()
 	enclen := suite.KeyLen(128)

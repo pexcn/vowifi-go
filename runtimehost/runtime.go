@@ -26,6 +26,7 @@ type Instance struct {
 	cancel        context.CancelFunc
 	state         State
 	service       Service
+	migrate       func(context.Context, string) error
 	resources     []io.Closer
 	observers     []Observer
 	notifications []notification

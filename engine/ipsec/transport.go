@@ -32,6 +32,11 @@ type udpConn struct {
 }
 
 func DialUDP(ctx context.Context, addr string) (DatagramConn, error) {
+	return DialUDPFrom(ctx, "", addr)
+}
+
+// DialUDPFrom binds a new path without altering an existing socket.
+func DialUDPFrom(ctx context.Context, local, addr string) (DatagramConn, error) {
 	if e := ctx.Err(); e != nil {
 		return nil, e
 	}
@@ -43,7 +48,14 @@ func DialUDP(ctx context.Context, addr string) (DatagramConn, error) {
 	if peer.IP.To4() == nil {
 		network = "udp6"
 	}
-	u, e := net.ListenUDP(network, nil)
+	var bind *net.UDPAddr
+	if local != "" {
+		bind, e = net.ResolveUDPAddr(network, net.JoinHostPort(local, "0"))
+		if e != nil {
+			return nil, e
+		}
+	}
+	u, e := net.ListenUDP(network, bind)
 	if e != nil {
 		return nil, e
 	}

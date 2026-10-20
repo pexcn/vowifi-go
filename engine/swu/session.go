@@ -31,6 +31,7 @@ type Config struct {
 	// A missing initial certificate AUTH may then defer authentication until
 	// mutual EAP-AKA and the final MSK-based responder AUTH both succeed.
 	EAPOnlyAuthentication bool
+	DisableMOBIKE         bool
 	AKAPrimeNetworkName   string
 	RequireAKAPrime       bool
 	EAPReauth             *eap.ReauthContext
@@ -87,6 +88,8 @@ type Session struct {
 	in, out                                            *ipsec.SA
 	packets                                            chan []byte
 	responses                                          chan ikev2.Message
+	mobike                                             bool
+	transport                                          *switchingConn
 	fragmentation                                      bool // immutable after IKE_SA_INIT
 	fragments                                          fragmentBuffer
 	spii, spir                                         uint64
@@ -276,6 +279,8 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		s.fail(err)
 		return nil, err
 	}
+	s.transport = newSwitchingConn(s.conn)
+	s.conn = s.transport
 	s.activeIKE = &ikeAssociation{spii: s.spii, spir: s.spir, keys: s.keys, localInitiator: true, nextID: s.nextID, created: time.Now()}
 	s.keys = vc.IKEKeys{} // The active association now owns the authenticated key material.
 	go s.readLoop()
@@ -703,6 +708,9 @@ func (s *Session) authenticate() error {
 	}
 	s.idBody = append([]byte{3, 0, 0, 0}, []byte(s.cfg.NAI)...)
 	ps := []ikev2.Payload{{Type: ikev2.IDi, Data: s.idBody}, {Type: ikev2.CP, Data: cp}, {Type: ikev2.SA, Data: sa}, {Type: ikev2.TSi, Data: ts}, {Type: ikev2.TSr, Data: ts}}
+	if !s.cfg.DisableMOBIKE {
+		ps = append(ps, ikev2.Notification(mobikeSupportedNotify, nil))
+	}
 	if s.cfg.EAPOnlyAuthentication {
 		ps = append(ps, ikev2.Notification(16417, nil)) // RFC 5998, section 3.
 	}
@@ -736,6 +744,9 @@ func (s *Session) authenticate() error {
 			}
 		}
 		if id == 1 {
+			if !s.cfg.DisableMOBIKE {
+				s.mobike = validMOBIKENegotiation(response.Payloads)
+			}
 			if _, e = s.rememberResponderIdentity(response.Payloads, true); e != nil {
 				return e
 			}
@@ -776,6 +787,9 @@ func (s *Session) authenticate() error {
 			}
 			if err := s.ctx.Err(); err != nil {
 				return err
+			}
+			if !s.cfg.DisableMOBIKE {
+				s.mobike = validMOBIKENegotiation(response.Payloads) || s.mobike
 			}
 			if err := client.Commit(); err != nil {
 				return err

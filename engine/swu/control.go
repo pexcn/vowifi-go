@@ -272,6 +272,10 @@ func (s *Session) peerInformational(ps []ikev2.Payload) ([]ikev2.Payload, bool, 
 			return nil, false, errors.New("unexpected informational payload")
 		}
 	}
+	cookieReply, err := s.peerMOBIKE(ps)
+	if err != nil {
+		return nil, false, err
+	}
 	var replies []uint32
 	s.childMu.Lock()
 	defer s.childMu.Unlock()
@@ -292,13 +296,13 @@ func (s *Session) peerInformational(ps []ikev2.Payload) ([]ikev2.Payload, bool, 
 		}
 	}
 	if len(replies) == 0 {
-		return nil, closeAfter, nil
+		return cookieReply, closeAfter, nil
 	}
 	data := []byte{3, 4, byte(len(replies) >> 8), byte(len(replies))}
 	for _, spi := range replies {
 		data = binary.BigEndian.AppendUint32(data, spi)
 	}
-	return []ikev2.Payload{{Type: ikev2.Delete, Data: data}}, closeAfter, nil
+	return append(cookieReply, ikev2.Payload{Type: ikev2.Delete, Data: data}), closeAfter, nil
 }
 
 func (s *Session) controlExchange(ps []ikev2.Payload) error {
@@ -332,6 +336,11 @@ func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssoc
 	if err != nil {
 		return empty, err
 	}
+	return s.exchangeFlightLocked(ctx, association, exchange, id, flight)
+}
+func (s *Session) exchangeFlightLocked(ctx context.Context, association *ikeAssociation, exchange byte, id uint32, flight *ikeFlight) (ikev2.Message, error) {
+	var empty ikev2.Message
+	var err error
 	for n := 0; n <= s.cfg.Retransmits; n++ {
 		if err = s.sendIKEPackets(ctx, flight.packets); err != nil {
 			return empty, err

@@ -37,6 +37,9 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	if err = inst.own(tunnel); err != nil {
 		return err
 	}
+	inst.mu.Lock()
+	inst.migrate = tunnel.UpdateAddresses
+	inst.mu.Unlock()
 	cfg := tunnel.Configuration()
 	if len(cfg.Addresses) == 0 {
 		return errors.New("SWu supplied no inner IP address")
@@ -394,8 +397,19 @@ func installDeliveryCallbacks(cfg *ims.Config, req StartRequest) {
 	}
 }
 
-// Explicitly unsupported features return errors; no capability is inferred from
-// a successful registration alone.
+// The host hook supplies observed public IPs, which may be NAT addresses that
+// cannot be bound locally. Rebind through the OS routing table instead.
 func (i *Instance) TriggerMOBIKE(oldIP, newIP string) error {
-	return fmt.Errorf("MOBIKE address migration is not implemented: %s -> %s", strings.TrimSpace(oldIP), strings.TrimSpace(newIP))
+	if net.ParseIP(strings.TrimSpace(newIP)) == nil {
+		return errors.New("invalid MOBIKE address observation")
+	}
+	i.mu.RLock()
+	migrate, ctx, stopped := i.migrate, i.ctx, i.stopped
+	i.mu.RUnlock()
+	if stopped || migrate == nil || ctx == nil {
+		return errors.New("MOBIKE requires an active tunnel")
+	}
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	return migrate(ctx, "")
 }
