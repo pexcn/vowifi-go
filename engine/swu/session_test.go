@@ -55,21 +55,22 @@ func (c *mappedUDP) SetPeer(peer string) error {
 func (c *mappedUDP) Close() error { c.closed.Store(true); return c.DatagramConn.Close() }
 
 type mockPeer struct {
-	t                             *testing.T
-	initial, natt                 *net.UDPConn
-	client                        *net.UDPAddr
-	cfg                           Config
-	transport                     *mappedUDP
-	cert                          []byte
-	signer                        *ecdsa.PrivateKey
-	spii, spir                    uint64
-	ni, nr, req, resp, id, peerID []byte
-	keys                          vc.IKEKeys
-	aka                           eap.Keys
-	toClient, fromClient          *ipsec.SA
-	childSPI                      uint32
-	err                           chan error
-	mode                          string
+	t                                *testing.T
+	initial, natt                    *net.UDPConn
+	client                           *net.UDPAddr
+	cfg                              Config
+	transport                        *mappedUDP
+	cert                             []byte
+	signer                           *ecdsa.PrivateKey
+	spii, spir                       uint64
+	ni, nr, req, resp, id, peerID    []byte
+	keys                             vc.IKEKeys
+	aka                              eap.Keys
+	toClient, fromClient             *ipsec.SA
+	childSPI                         uint32
+	err                              chan error
+	mode                             string
+	authFragments, responseFragments int
 }
 
 func newMockPeer(t *testing.T, mode string) *mockPeer {
@@ -135,6 +136,31 @@ func (p *mockPeer) send(c *net.UDPConn, b []byte, marked bool) error {
 }
 func (p *mockPeer) response(h ikev2.Header, ps []ikev2.Payload) error {
 	h.Flags = ikev2.FlagResponse
+	if p.mode == "fragment" {
+		packets, err := ikev2.SealFragments(h, ps, p.keys.SKer, p.keys.SKar, vc.HMACSHA256128, nil, 384)
+		if err != nil {
+			return err
+		}
+		if len(packets) > 1 {
+			p.responseFragments += len(packets)
+			// Reorder, duplicate and inject a corrupt fragment before recovery.
+			for i := len(packets) - 1; i > 0; i-- {
+				if err = p.send(p.natt, packets[i], true); err != nil {
+					return err
+				}
+			}
+			if err = p.send(p.natt, packets[len(packets)-1], true); err != nil {
+				return err
+			}
+			bad := bytes.Clone(packets[0])
+			bad[len(bad)-1] ^= 1
+			if err = p.send(p.natt, bad, true); err != nil {
+				return err
+			}
+			return p.send(p.natt, packets[0], true)
+		}
+		return p.send(p.natt, packets[0], true)
+	}
 	b, e := ikev2.Seal(h, ps, p.keys.SKer, p.keys.SKar, vc.HMACSHA256128, nil)
 	if e != nil {
 		return e
@@ -142,13 +168,34 @@ func (p *mockPeer) response(h ikev2.Header, ps []ikev2.Payload) error {
 	return p.send(p.natt, b, true)
 }
 func (p *mockPeer) readAuth(id uint32) (ikev2.Message, error) {
-	b, e := p.read(p.natt, true)
-	if e != nil {
-		return ikev2.Message{}, e
-	}
-	m, e := ikev2.Open(b, p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
-	if e != nil {
-		return m, e
+	var fb fragmentBuffer
+	var m ikev2.Message
+	for {
+		b, e := p.read(p.natt, true)
+		if e != nil {
+			return m, e
+		}
+		if b[16] == ikev2.SKF {
+			p.authFragments++
+			f, e := ikev2.OpenFragment(b, p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
+			if e != nil {
+				return m, e
+			}
+			var ready bool
+			m, ready, e = fb.add(f, time.Now())
+			if e != nil {
+				return m, e
+			}
+			if !ready {
+				continue
+			}
+		} else {
+			m, e = ikev2.Open(b, p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
+			if e != nil {
+				return m, e
+			}
+		}
+		break
 	}
 	if m.Header.MessageID != id || m.Header.Exchange != ikev2.IKEAuth || m.Header.Flags != ikev2.FlagInitiator {
 		return m, errors.New("wrong AUTH exchange header")
@@ -229,7 +276,14 @@ func (p *mockPeer) handshake() error {
 		return e
 	}
 	p.nr = bytes.Repeat([]byte{0x71}, 32)
-	p.resp, e = (ikev2.Message{Header: ikev2.Header{InitiatorSPI: p.spii, ResponderSPI: p.spir, Exchange: ikev2.SAInit, Flags: ikev2.FlagResponse}, Payloads: []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.KE, Data: append([]byte{0, 14, 0, 0}, dh.Public...)}, {Type: ikev2.Nonce, Data: p.nr}}}).Marshal()
+	if !fragmentationOffered(m.Payloads) {
+		return errors.New("missing fragmentation offer")
+	}
+	responsePayloads := []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.KE, Data: append([]byte{0, 14, 0, 0}, dh.Public...)}, {Type: ikev2.Nonce, Data: p.nr}}
+	if p.mode == "fragment" {
+		responsePayloads = append(responsePayloads, ikev2.Notification(ikev2.FragmentationSupported, nil))
+	}
+	p.resp, e = (ikev2.Message{Header: ikev2.Header{InitiatorSPI: p.spii, ResponderSPI: p.spir, Exchange: ikev2.SAInit, Flags: ikev2.FlagResponse}, Payloads: responsePayloads}).Marshal()
 	if e != nil {
 		return e
 	}

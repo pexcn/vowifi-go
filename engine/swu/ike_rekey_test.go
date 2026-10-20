@@ -216,7 +216,7 @@ func TestIKERekeyPeerRoleFlipOldRetransmissionAndChildKeys(t *testing.T) {
 	if !bytes.Equal(responseWire, retry) {
 		t.Fatal("lost IKE rekey response created another SA")
 	}
-	sendIKEFromPeer(t, p, old, 1, ikev2.Informational, false, ikeDeletePayload())
+	deleteRequest := sendIKEFromPeer(t, p, old, 1, ikev2.Informational, false, ikeDeletePayload())
 	deleted, deleteWire := readIKEFromClient(t, p, old)
 	if len(deleted.Payloads) != 0 {
 		t.Fatal("IKE Delete response should be empty")
@@ -224,10 +224,7 @@ func TestIKERekeyPeerRoleFlipOldRetransmissionAndChildKeys(t *testing.T) {
 	checkIKECountersAndChild(t, p, s, peer)
 	// A late old-SA Delete retransmission must use its cached old-key reply
 	// and must not close the replacement IKE SA or any Child SA.
-	s.ikeStateMu.RLock()
-	cached := append([]byte{}, s.retiredIKE.lastPeerRequest...)
-	s.ikeStateMu.RUnlock()
-	if err := p.send(p.natt, cached, true); err != nil {
+	if err := p.send(p.natt, deleteRequest, true); err != nil {
 		t.Fatal(err)
 	}
 	_, again := readIKEFromClient(t, p, old)

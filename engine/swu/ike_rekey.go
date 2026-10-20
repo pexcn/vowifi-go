@@ -20,14 +20,16 @@ const (
 // The original IKE_AUTH fields on Session remain immutable after startup.
 // Old associations only serve duplicate requests and IKE Delete exchanges.
 type ikeAssociation struct {
-	spii, spir                     uint64
-	keys                           vc.IKEKeys
-	localInitiator                 bool
-	created                        time.Time
-	nextID                         uint32 // ikeMu
-	lastPeerID                     uint32 // remaining fields: sole readLoop owner
-	havePeerID                     bool
-	lastPeerReply, lastPeerRequest []byte
+	spii, spir       uint64
+	keys             vc.IKEKeys
+	localInitiator   bool
+	created          time.Time
+	nextID           uint32 // ikeMu
+	lastPeerID       uint32 // remaining fields: sole readLoop owner
+	havePeerID       bool
+	lastPeerRequest  [32]byte
+	lastPeerReply    [][]byte
+	lastPeerExchange byte
 }
 
 func (a *ikeAssociation) header(exchange byte, id uint32, response bool) ikev2.Header {

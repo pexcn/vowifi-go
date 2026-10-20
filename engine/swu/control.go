@@ -1,8 +1,8 @@
 package swu
 
 import (
-	"bytes"
 	"context"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
@@ -57,6 +57,7 @@ func (s *Session) permitted(p []byte, outbound bool) bool {
 	return selectorAllows(local, src, proto, sp) && selectorAllows(remote, dst, proto, dp)
 }
 func (s *Session) readLoop() {
+	defer s.fragments.clear()
 	for {
 		packet, e := s.conn.Read(s.ctx)
 		if e != nil {
@@ -100,17 +101,40 @@ func (s *Session) readLoop() {
 			continue
 		}
 		enc, auth := association.inboundKeys()
-		m, e := ikev2.Open(b, enc, auth, s.integ)
-		if e != nil {
+		if h.Flags&ikev2.FlagInitiator != association.peerFlags(false) {
 			continue
 		}
-		if m.Header.Flags&ikev2.FlagInitiator != association.peerFlags(false) {
-			continue
+		var m ikev2.Message
+		if h.NextPayload == ikev2.SKF {
+			if !s.fragmentation {
+				continue
+			}
+			f, err := ikev2.OpenFragment(b, enc, auth, s.integ)
+			if err != nil {
+				continue
+			}
+			if h.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) == association.peerFlags(false) && association.havePeerID && h.MessageID == association.lastPeerID {
+				// RFC 7383 2.6.1: only fragment 1 triggers the cached reply.
+				if f.Number == 1 && h.Exchange == association.lastPeerExchange {
+					_ = s.sendIKEPackets(s.ctx, association.lastPeerReply)
+				}
+				continue
+			}
+			var ready bool
+			m, ready, e = s.fragments.add(f, time.Now())
+			if e != nil || !ready {
+				continue
+			}
+		} else {
+			m, e = ikev2.Open(b, enc, auth, s.integ)
+			if e != nil {
+				continue
+			}
 		}
 		flags := m.Header.Flags & (ikev2.FlagInitiator | ikev2.FlagResponse)
 		if flags == association.peerFlags(true) {
 			select {
-			case s.responses <- append([]byte{}, b...):
+			case s.responses <- m:
 			default:
 			}
 			continue
@@ -118,9 +142,13 @@ func (s *Session) readLoop() {
 		if flags != association.peerFlags(false) {
 			continue
 		}
+		canonical, err := m.Marshal()
+		if err != nil {
+			continue
+		}
 		if association.havePeerID && m.Header.MessageID == association.lastPeerID {
-			if association.lastPeerReply != nil && bytes.Equal(b, association.lastPeerRequest) {
-				_ = s.ikeSend(s.ctx, association.lastPeerReply)
+			if association.lastPeerReply != nil && sha256.Sum256(canonical) == association.lastPeerRequest {
+				_ = s.sendIKEPackets(s.ctx, association.lastPeerReply)
 			}
 			continue
 		}
@@ -131,7 +159,7 @@ func (s *Session) readLoop() {
 		if m.Header.MessageID != expected {
 			continue
 		}
-		if e := s.answerPeerRequest(association, retired, m, b); e != nil {
+		if e := s.answerPeerRequest(association, retired, m, canonical); e != nil {
 			s.fail(e)
 			return
 		}
@@ -183,13 +211,14 @@ func (s *Session) answerPeerRequest(association *ikeAssociation, retired bool, m
 	}
 	h := association.header(m.Header.Exchange, m.Header.MessageID, true)
 	enc, auth := association.outboundKeys()
-	wire, err := ikev2.Seal(h, reply, enc, auth, s.integ, s.cfg.Random)
+	wire, err := s.sealIKE(h, reply, enc, auth)
 	if err != nil {
 		return err
 	}
 	association.lastPeerID, association.havePeerID, association.lastPeerReply = m.Header.MessageID, true, wire
-	association.lastPeerRequest = append([]byte{}, raw...)
-	if err = s.ikeSend(s.ctx, wire); err != nil {
+	association.lastPeerRequest = sha256.Sum256(raw)
+	association.lastPeerExchange = m.Header.Exchange
+	if err = s.sendIKEPackets(s.ctx, wire); err != nil {
 		return err
 	}
 	if pair != nil {
@@ -299,12 +328,12 @@ func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssoc
 	}
 	association.nextID++
 	enc, auth := association.outboundKeys()
-	b, err := ikev2.Seal(association.header(exchange, id, false), ps, enc, auth, s.integ, s.cfg.Random)
+	b, err := s.sealIKE(association.header(exchange, id, false), ps, enc, auth)
 	if err != nil {
 		return empty, err
 	}
 	for n := 0; n <= s.cfg.Retransmits; n++ {
-		if err = s.ikeSend(ctx, b); err != nil {
+		if err = s.sendIKEPackets(ctx, b); err != nil {
 			return empty, err
 		}
 		timer := time.NewTimer(s.cfg.Timeout * time.Duration(uint64(1)<<n))
@@ -315,10 +344,8 @@ func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssoc
 				return empty, ctx.Err()
 			case <-timer.C:
 				goto retry
-			case raw := <-s.responses:
-				enc, auth := association.inboundKeys()
-				m, err := ikev2.Open(raw, enc, auth, s.integ)
-				if err == nil && m.Header.InitiatorSPI == association.spii && m.Header.ResponderSPI == association.spir && m.Header.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) == association.peerFlags(true) && m.Header.Exchange == exchange && m.Header.MessageID == id {
+			case m := <-s.responses:
+				if m.Header.InitiatorSPI == association.spii && m.Header.ResponderSPI == association.spir && m.Header.Flags&(ikev2.FlagInitiator|ikev2.FlagResponse) == association.peerFlags(true) && m.Header.Exchange == exchange && m.Header.MessageID == id {
 					timer.Stop()
 					return m, nil
 				}
@@ -366,6 +393,7 @@ func (s *Session) maintain() {
 			s.fail(s.ctx.Err())
 			return
 		case <-prune.C:
+			s.fragments.prune(time.Now())
 			s.childMu.Lock()
 			s.pruneChildrenLocked(time.Now())
 			s.childMu.Unlock()

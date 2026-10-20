@@ -111,7 +111,7 @@ func ParsePayloads(first byte, b []byte) ([]Payload, error) {
 			}
 		}
 		ps = append(ps, Payload{first, b[1]&128 != 0, append([]byte{}, b[4:n]...)})
-		if first == SK {
+		if first == SK || first == SKF {
 			return nil, errors.New("encrypted payload requires authenticated decryption")
 		}
 		first = b[0]

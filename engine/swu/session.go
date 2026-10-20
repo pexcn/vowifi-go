@@ -79,7 +79,9 @@ type Session struct {
 	configuration                                      Configuration
 	in, out                                            *ipsec.SA
 	packets                                            chan []byte
-	responses                                          chan []byte
+	responses                                          chan ikev2.Message
+	fragmentation                                      bool // immutable after IKE_SA_INIT
+	fragments                                          fragmentBuffer
 	spii, spir                                         uint64
 	ni, nr, initRequest, initResponse, idBody          []byte
 	keys                                               vc.IKEKeys
@@ -200,7 +202,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		c.ServerName = host
 	}
 	childCtx, cancel := context.WithCancel(ctx)
-	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan []byte, 8), childReset: make(chan struct{}, 1), ikeReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
+	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan ikev2.Message, 8), childReset: make(chan struct{}, 1), ikeReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
 	s.ikeProfiles, s.keyExchangeGroup = profiles, c.DHGroup
 	_, port, _ := net.SplitHostPort(remote)
 	s.encapsulated = port == "4500"
@@ -287,6 +289,7 @@ func (s *Session) fail(e error) {
 		if s.conn != nil {
 			s.conn.Close()
 		}
+		s.fragments.clear()
 		close(s.done)
 	})
 }
@@ -349,11 +352,14 @@ func (s *Session) ikeSend(ctx context.Context, b []byte) error {
 func (s *Session) header(exchange byte, id uint32) ikev2.Header {
 	return ikev2.Header{InitiatorSPI: s.spii, ResponderSPI: s.spir, Exchange: exchange, Flags: ikev2.FlagInitiator, MessageID: id}
 }
-func (s *Session) exchange(request []byte, encrypted bool) (ikev2.Message, []byte, error) {
+func (s *Session) exchange(requests [][]byte, encrypted bool) (ikev2.Message, []byte, error) {
+	request := requests[0]
 	want, e := ikev2.ParseHeader(request)
 	if e != nil {
 		return ikev2.Message{}, nil, e
 	}
+	var fragments fragmentBuffer
+	defer fragments.clear()
 	stage := fmt.Sprintf("exchange_%d", want.Exchange)
 	switch want.Exchange {
 	case ikev2.SAInit:
@@ -368,7 +374,7 @@ func (s *Session) exchange(request []byte, encrypted bool) (ikev2.Message, []byt
 		retransmits = 2
 	}
 	for attempt := 0; attempt <= retransmits; attempt++ {
-		if e = s.ikeSend(s.ctx, request); e != nil {
+		if e = s.sendIKEPackets(s.ctx, requests); e != nil {
 			return ikev2.Message{}, nil, fmt.Errorf("%s send (message_id=%d, attempt=%d): %w", stage, want.MessageID, attempt+1, e)
 		}
 		timeout := s.cfg.Timeout * time.Duration(uint64(1)<<attempt)
@@ -409,7 +415,11 @@ func (s *Session) exchange(request []byte, encrypted bool) (ikev2.Message, []byt
 			}
 			var m ikev2.Message
 			if encrypted {
-				m, err = ikev2.Open(b, s.keys.SKer, s.keys.SKar, s.integ)
+				var ready bool
+				m, ready, err = s.openIKE(b, s.keys.SKer, s.keys.SKar, &fragments)
+				if err == nil && !ready {
+					continue
+				}
 			} else {
 				m, err = ikev2.Parse(b)
 			}
@@ -485,6 +495,7 @@ func natHash(spii, spir uint64, ip net.IP, port uint16) []byte {
 	return h[:]
 }
 func (s *Session) handshake() error {
+	s.fragmentation = false
 	if s.cfg.EPDGFailover {
 		if s.initialPeers == nil {
 			s.initialPeers = make(map[string]bool)
@@ -511,6 +522,7 @@ func (s *Session) handshake() error {
 	ke := append(binary.BigEndian.AppendUint16(nil, s.keyExchangeGroup), 0, 0)
 	ke = append(ke, dh.Public...)
 	ps := []ikev2.Payload{{Type: ikev2.SA, Data: sa}, {Type: ikev2.KE, Data: ke}, {Type: ikev2.Nonce, Data: s.ni}} // A mismatching source hash deliberately requests UDP encapsulation, including through proxies.
+	ps = append(ps, ikev2.Notification(ikev2.FragmentationSupported, nil))
 	ps = append(ps, ikev2.Notification(16388, natHash(s.spii, 0, net.IPv4zero.To4(), 0)))
 	if h, p, e := net.SplitHostPort(s.RemoteAddr); e == nil {
 		if a, e := net.ResolveUDPAddr("udp", net.JoinHostPort(h, p)); e == nil {
@@ -527,7 +539,7 @@ func (s *Session) handshake() error {
 		if e != nil {
 			return e
 		}
-		response, s.initResponse, e = s.exchange(s.initRequest, false)
+		response, s.initResponse, e = s.exchange([][]byte{s.initRequest}, false)
 		if e != nil {
 			if cookies == 0 {
 				if retried, result := s.retryInitialEndpoint(e); retried {
@@ -572,6 +584,7 @@ func (s *Session) handshake() error {
 	if response.Header.ResponderSPI == 0 {
 		return errors.New("zero responder SPI in accepted SA_INIT")
 	}
+	s.fragmentation = fragmentationOffered(response.Payloads)
 	s.spir = response.Header.ResponderSPI
 	body, e := ikev2.One(response.Payloads, ikev2.SA)
 	if e != nil {
@@ -671,11 +684,11 @@ func (s *Session) authenticate() error {
 	eapDone := false
 	sentAuth := false
 	for id := uint32(1); id <= 32; id++ {
-		request, e := ikev2.Seal(s.header(ikev2.IKEAuth, id), ps, s.keys.SKei, s.keys.SKai, s.integ, s.cfg.Random)
+		requests, e := s.sealIKE(s.header(ikev2.IKEAuth, id), ps, s.keys.SKei, s.keys.SKai)
 		if e != nil {
 			return e
 		}
-		response, _, e := s.exchange(request, true)
+		response, _, e := s.exchange(requests, true)
 		if e != nil {
 			return e
 		}
