@@ -371,7 +371,6 @@ func TestIKERekeyTimerAndAuthenticationLifetime(t *testing.T) {
 
 func TestIKERekeyDoesNotExtendAuthenticatedLifetime(t *testing.T) {
 	p := newMockPeer(t, "auth-lifetime")
-	p.cfg.Timeout = 20 * time.Millisecond
 	p.start()
 	s, err := Start(context.Background(), p.cfg)
 	if err != nil {

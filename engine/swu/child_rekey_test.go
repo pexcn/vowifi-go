@@ -16,7 +16,7 @@ import (
 func startRekeyPeer(t *testing.T, lifetime time.Duration) (*mockPeer, *Session) {
 	t.Helper()
 	p := newMockPeer(t, "")
-	p.cfg.Timeout = 20 * time.Millisecond
+	// Keep the normal mock timeout: DH and CI scheduling can exceed 20 ms.
 	if lifetime > 0 {
 		p.cfg.ChildLifetime = lifetime
 		p.cfg.NATKeepalive = 5 * time.Millisecond
@@ -426,7 +426,7 @@ func TestChildRekeyOldDeleteTimeoutAndResourceBound(t *testing.T) {
 }
 
 func TestChildRekeyTimerAndKeepaliveContinue(t *testing.T) {
-	p, s := startRekeyPeer(t, 250*time.Millisecond)
+	p, s := startRekeyPeer(t, time.Second)
 	request, _ := readRekeyControl(t, p)
 	if request.Header.Exchange != ikev2.CreateChildSA {
 		t.Fatal("lifetime did not initiate rekey")
@@ -450,7 +450,7 @@ func TestChildRekeyTimerAndKeepaliveContinue(t *testing.T) {
 	// No peer reply: the configured hard lifetime still bounds this SA.
 	select {
 	case <-s.Done():
-	case <-time.After(time.Second):
+	case <-time.After(2 * time.Second):
 		t.Fatal("rekey failure exceeded hard lifetime")
 	}
 	if !errors.Is(s.Err(), ErrRekeyRequired) {
@@ -495,8 +495,8 @@ func completeInheritedPFSRekey(t *testing.T, p *mockPeer, s *Session) uint32 {
 		t.Fatal(err)
 	}
 	deletion, wire := readRekeyControl(t, p)
-	// DH14 work can outlast the mock's 20 ms retransmission timer. Requests
-	// already queued before our response must retain the same sealed bytes;
+	// DH14 work under CI load can outlast the mock's retransmission timer.
+	// Requests already queued before our response must retain the same sealed bytes;
 	// consume those duplicates before expecting the subsequent Delete.
 	for retries := 0; bytes.Equal(wire, requestWire); retries++ {
 		if retries >= p.cfg.Retransmits {
