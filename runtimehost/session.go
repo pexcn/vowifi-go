@@ -158,6 +158,13 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 		}
 		return fmt.Errorf("IMS: %w", err)
 	}
+	if svc.Ready() {
+		inst.update(func(s *State) {
+			s.Phase = PhaseIMSReady
+			s.IMSReady = true
+			s.LastReason = PhaseIMSReady
+		})
+	}
 	inst.mu.Lock()
 	inst.service = &messagingService{service: svc, store: req.DeliveryStore, dispatch: inst, deviceID: req.DeviceID, imsi: req.Profile.IMSI}
 	inst.mu.Unlock()

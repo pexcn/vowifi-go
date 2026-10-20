@@ -295,4 +295,8 @@ type StartRequest struct {
 	Dispatch              eventhost.Dispatcher
 	BeforeStart           func(context.Context, SessionConfig) error
 	ShouldRun             func() bool
+	// Observer is registered before startup so it receives progress while Start
+	// is connecting. Callbacks run in order outside the instance lock and must
+	// not block.
+	Observer Observer `json:"-"`
 }

@@ -136,6 +136,9 @@ func start(ctx context.Context, req StartRequest, stages startup) (*Instance, er
 	runCtx, cancel := context.WithCancel(ctx)
 	now := time.Now()
 	i := &Instance{ctx: runCtx, cancel: cancel, deliveryStore: req.DeliveryStore, dispatch: req.Dispatch, state: State{DeviceID: req.DeviceID, TraceID: req.TraceID, DataplaneMode: req.Dataplane.Mode, NetworkMode: req.NetworkMode, StartedAt: now, UpdatedAt: now}}
+	if req.Observer != nil {
+		i.observers = append(i.observers, req.Observer)
+	}
 	if req.Access != nil && req.Access.modem != nil {
 		i.state.RegStatus, i.state.RegStatusText = req.Access.modem.GetRegStatus()
 	}
