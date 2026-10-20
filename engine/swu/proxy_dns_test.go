@@ -95,6 +95,10 @@ func TestProxyDNSCancellationClosesPendingQueries(t *testing.T) {
 }
 
 func answerProxyDNS(t *testing.T, c net.Conn) {
+	answerProxyDNSCode(t, c, 0)
+}
+
+func answerProxyDNSCode(t *testing.T, c net.Conn, rcode uint16) {
 	t.Helper()
 	for {
 		var length [2]byte
@@ -125,8 +129,11 @@ func answerProxyDNS(t *testing.T, c net.Conn) {
 		if kind == 28 {
 			addresses = []net.IP{net.ParseIP("2001:db8::10").To16()}
 		}
+		if rcode != 0 {
+			addresses = nil
+		}
 		response := append([]byte(nil), query[:end+5]...)
-		binary.BigEndian.PutUint16(response[2:4], 0x8180)
+		binary.BigEndian.PutUint16(response[2:4], 0x8180|rcode)
 		binary.BigEndian.PutUint16(response[6:8], uint16(len(addresses)))
 		binary.BigEndian.PutUint16(response[8:10], 0)
 		binary.BigEndian.PutUint16(response[10:12], 0)

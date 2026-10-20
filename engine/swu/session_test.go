@@ -356,6 +356,9 @@ func (p *mockPeer) handshake() error {
 		return e
 	}
 	p.childSPI = binary.BigEndian.Uint32(proposal[0].SPI)
+	if p.mode == "internal-address-failure" {
+		return p.response(m.Header, []ikev2.Payload{ikev2.Notification(36, nil)})
+	}
 	p.peerID = append([]byte{2, 0, 0, 0}, []byte("epdg.test")...)
 	auth, e := p.certAuth()
 	if e != nil {
