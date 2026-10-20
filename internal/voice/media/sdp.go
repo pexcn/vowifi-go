@@ -21,11 +21,16 @@ type Description struct {
 	RTP, RTCP int
 	Codecs    []Codec
 	Direction string
+	Crypto    *SDESCrypto
+	Params    map[uint8]string
 }
 
 func ParseSDP(b []byte) (Description, error) {
 	var d Description
+	var err error
 	d.Direction = "sendrecv"
+	d.Params = make(map[uint8]string)
+	secure := false
 	var sessionIP net.IP
 	sessionDirection := "sendrecv"
 	audio := false
@@ -47,7 +52,8 @@ func ParseSDP(b []byte) (Description, error) {
 				continue
 			}
 			seen = true
-			if f[2] != "RTP/AVP" {
+			secure = f[2] == "RTP/SAVP"
+			if f[2] != "RTP/AVP" && !secure {
 				return d, errors.New("unsupported secure or non-AVP RTP profile")
 			}
 			n, e := strconv.Atoi(f[1])
@@ -98,9 +104,33 @@ func ParseSDP(b []byte) (Description, error) {
 		if !audio {
 			continue
 		}
-		if strings.HasPrefix(line, "a=crypto:") || strings.HasPrefix(line, "a=fingerprint:") {
-			return d, errors.New("secure media attributes unsupported")
+		if strings.HasPrefix(line, "a=fingerprint:") {
+			return d, errors.New("DTLS media unsupported")
 		}
+		if strings.HasPrefix(line, "a=crypto:") {
+			if !secure || d.Crypto != nil {
+				return d, errors.New("unexpected or multiple SDES attributes")
+			}
+			d.Crypto, err = parseSDESCrypto(strings.TrimPrefix(line, "a=crypto:"))
+			if err != nil {
+				return d, err
+			}
+		}
+		if strings.HasPrefix(line, "a=fmtp:") {
+			v := strings.Fields(strings.TrimPrefix(line, "a=fmtp:"))
+			if len(v) < 2 {
+				return d, errors.New("invalid codec parameters")
+			}
+			payload, err := strconv.ParseUint(v[0], 10, 7)
+			if err != nil {
+				return d, err
+			}
+			if _, ok := d.Params[uint8(payload)]; ok {
+				return d, errors.New("duplicate codec parameters")
+			}
+			d.Params[uint8(payload)] = strings.Join(v[1:], " ")
+		}
+
 		if strings.HasPrefix(line, "a=rtpmap:") {
 			f := strings.Fields(strings.TrimPrefix(line, "a=rtpmap:"))
 			if len(f) != 2 {
@@ -154,6 +184,9 @@ func ParseSDP(b []byte) (Description, error) {
 			return d, errors.New("RTCP multiplexing unsupported")
 		}
 	}
+	if secure && d.Crypto == nil {
+		return d, errors.New("SRTP profile requires SDES keys")
+	}
 	if !seen || d.Address == nil {
 		return d, errors.New("SDP has no usable audio connection")
 	}
@@ -179,13 +212,26 @@ func (d Description) SDP() ([]byte, error) {
 	for _, c := range d.Codecs {
 		ps = append(ps, strconv.Itoa(int(c.Payload)))
 	}
-	text := fmt.Sprintf("v=0\r\no=- 1 1 IN %s %s\r\ns=VoWiFi\r\nc=IN %s %s\r\nt=0 0\r\nm=audio %d RTP/AVP %s\r\na=rtcp:%d\r\n", family, d.Address, family, d.Address, d.RTP, strings.Join(ps, " "), d.RTCP)
+	profile := "RTP/AVP"
+	if d.Crypto != nil {
+		profile = "RTP/SAVP"
+	}
+	text := fmt.Sprintf("v=0\r\no=- 1 1 IN %s %s\r\ns=VoWiFi\r\nc=IN %s %s\r\nt=0 0\r\nm=audio %d %s %s\r\na=rtcp:%d\r\n", family, d.Address, family, d.Address, d.RTP, profile, strings.Join(ps, " "), d.RTCP)
 	for _, c := range d.Codecs {
 		text += fmt.Sprintf("a=rtpmap:%d %s/%d", c.Payload, c.Name, c.Rate)
 		if c.Channels > 1 {
 			text += fmt.Sprintf("/%d", c.Channels)
 		}
 		text += "\r\n"
+	}
+	for payload, params := range d.Params {
+		if strings.ContainsAny(params, "\r\n") {
+			return nil, errors.New("invalid SDP parameters")
+		}
+		text += fmt.Sprintf("a=fmtp:%d %s\r\n", payload, params)
+	}
+	if d.Crypto != nil {
+		text += d.Crypto.attribute() + "\r\n"
 	}
 	direction := d.Direction
 	if direction == "" {

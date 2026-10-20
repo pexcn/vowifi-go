@@ -7,19 +7,25 @@ import (
 	"errors"
 	"fmt"
 	"net"
+	"strings"
 	"sync"
 	"time"
 )
 
 type ListenPacketFunc func(context.Context, string, string) (net.PacketConn, error)
 type Session struct {
-	RTP, RTCP   net.PacketConn
-	Local       Description
-	mu          sync.RWMutex
-	remote      Description
-	codec       Codec
-	remoteCodec Codec
-	once        sync.Once
+	toneMu                  sync.Mutex
+	toneSequence            uint16
+	toneTimestamp, toneSSRC uint32
+	toneInitialized         bool
+	RTP, RTCP               net.PacketConn
+	Local                   Description
+	mu                      sync.RWMutex
+	remote                  Description
+	codec                   Codec
+	remoteCodec             Codec
+	protection              *mediaProtection
+	once                    sync.Once
 }
 
 func NewSession(ctx context.Context, listen ListenPacketFunc, address string) (*Session, error) {
@@ -66,14 +72,23 @@ func (s *Session) SetRemote(d Description) error {
 	if e != nil {
 		return e
 	}
+	if strings.EqualFold(r.Name, "telephone-event") {
+		return errors.New("SDP has no supported audio codec")
+	}
 	if d.Address == nil || d.Address.IsUnspecified() || d.Address.IsMulticast() || d.RTP < 1 || d.RTP > 65535 || d.RTCP < 1 || d.RTCP > 65535 {
 		return errors.New("invalid remote media")
 	}
 	s.mu.Lock()
+	defer s.mu.Unlock()
+	if err := compatibleParameters(s.Local, d, l, r); err != nil {
+		return err
+	}
+	if err := s.configureProtection(d); err != nil {
+		return err
+	}
 	s.remote = d
 	s.codec = l
 	s.remoteCodec = r
-	s.mu.Unlock()
 	return nil
 }
 func (s *Session) Close() error {
@@ -154,16 +169,25 @@ func (s *Session) read(ctx context.Context, rtcp bool, fn func([]byte) error) er
 		if !ok || !actual.IP.Equal(want.IP) || actual.Port != want.Port {
 			continue
 		}
+		packet, err := s.unprotectPacket(b[:n], rtcp)
+		if err != nil {
+			continue
+		}
 		if rtcp {
-			if !validRTCP(b[:n]) {
+			if !validRTCP(packet) {
 				continue
 			}
 		} else {
-			if !validRTP(b[:n]) || b[1]&127 != codec.Payload {
+			if !validRTP(packet) || packet[1]&127 != codec.Payload && !s.allowedPayload(packet[1]&127) {
 				continue
 			}
 		}
-		if e := fn(b[:n]); e != nil {
+		if !rtcp && packet[1]&127 == codec.Payload {
+			if err := validateEncodedMedia(packet, codec); err != nil {
+				continue
+			}
+		}
+		if e := fn(packet); e != nil {
 			return e
 		}
 	}
@@ -183,16 +207,11 @@ func (s *Session) RelayTo(ctx context.Context, dst *Session) error {
 	for _, isRTCP := range []bool{false, true} {
 		go func(rtcp bool) {
 			errs <- s.read(ctx, rtcp, func(b []byte) error {
-				addr, _, codec, _ := dst.endpoint(rtcp)
-				conn := dst.RTP
-				if rtcp {
-					conn = dst.RTCP
-				} else {
+				_, _, codec, _ := dst.endpoint(rtcp)
+				if !rtcp {
 					b[1] = (b[1] & 128) | codec.Payload
 				}
-				_ = conn.SetWriteDeadline(time.Now().Add(time.Second))
-				_, e := conn.WriteTo(b, addr)
-				return e
+				return dst.writePacket(ctx, b, rtcp)
 			})
 		}(isRTCP)
 	}
@@ -258,16 +277,14 @@ func (s *Session) RunSilentCall(ctx context.Context) error {
 			seq++
 			stamp += 160
 			_ = s.RTP.SetWriteDeadline(time.Now().Add(time.Second))
-			if _, e := s.RTP.WriteTo(packet, remote); e != nil {
+			if e := s.writePacket(ctx, packet, false); e != nil {
 				return fmt.Errorf("RTP silence: %w", e)
 			}
 			packets++
 			octets += uint32(len(packet) - 12)
 		case <-rtcpTick.C:
 			rr := rtcpReport(time.Now(), ssrc, stamp, packets, octets)
-			addr, _, _, _ := s.endpoint(true)
-			_ = s.RTCP.SetWriteDeadline(time.Now().Add(time.Second))
-			if _, e := s.RTCP.WriteTo(rr, addr); e != nil {
+			if e := s.writePacket(ctx, rr, true); e != nil {
 				return e
 			}
 		}
