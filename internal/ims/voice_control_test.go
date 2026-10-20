@@ -14,6 +14,19 @@ import (
 	"github.com/iniwex5/vowifi-go/runtimehost/voicehost"
 )
 
+type delayedAnswerWriteConn struct{ net.Conn }
+
+func (c delayedAnswerWriteConn) Write(b []byte) (int, error) {
+	n, err := c.Conn.Write(b)
+	if err == nil && bytes.HasPrefix(b, []byte("SIP/2.0 200 ")) &&
+		strings.Contains(strings.ToLower(string(b)), "\r\ncseq: 1 invite\r\n") {
+		// The peer can consume the answer and send ACK/UPDATE before the
+		// caller returns from Write, as also happens under CI scheduling.
+		time.Sleep(10 * time.Millisecond)
+	}
+	return n, err
+}
+
 func TestControlledIncomingAnswerMediaDTMFHoldAndBye(t *testing.T) {
 	remote, err := media.NewSession(t.Context(), voiceListen, "127.0.0.1")
 	if err != nil {
@@ -128,6 +141,14 @@ func TestControlledIncomingAnswerMediaDTMFHoldAndBye(t *testing.T) {
 		}
 		return nil
 	})
+	dial := cfg.DialContext
+	cfg.DialContext = func(ctx context.Context, network, address string) (net.Conn, error) {
+		conn, err := dial(ctx, network, address)
+		if err != nil {
+			return nil, err
+		}
+		return delayedAnswerWriteConn{conn}, nil
+	}
 	a := startVoice(t, cfg)
 	a.cfg.EnableCallControl = true
 	close(begin)

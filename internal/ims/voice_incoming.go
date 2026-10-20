@@ -320,8 +320,13 @@ func (a *VoiceAgent) handleLiveRequest(l *liveCall, m *message) bool {
 		if original != nil && state == "answering" && hasSeq {
 			wanted, _ := callCSeq(original)
 			if seq == wanted {
+				// A peer may ACK immediately after reading the 200, before
+				// Answer's write returns and releases the operation lock.
+				// Complete that handoff before accepting the next UPDATE.
+				l.operation.Lock()
 				l.connected(c.media)
 				l.ackOnce.Do(func() { close(l.ack) })
+				l.operation.Unlock()
 			}
 		}
 		return true
