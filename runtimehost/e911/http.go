@@ -6,11 +6,15 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
 	"net/netip"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
+
+	"github.com/iniwex5/vowifi-go/engine/ipsec"
 )
 
 const maxBodyBytes = 1 << 20
@@ -24,6 +28,41 @@ func NewDefaultHTTPClient() HTTPClient {
 		// Do not forward subscriber identities, AKA responses or tokens to a redirect.
 		CheckRedirect: func(*http.Request, []*http.Request) error { return http.ErrUseLastResponse },
 	}}
+}
+
+// NewHTTPClientWithProxy preserves HTTPS verification and redirect policy,
+// resolves target names at SOCKS5, and ignores HTTP_PROXY/HTTPS_PROXY settings.
+// Call CloseIdleConnections on the result when its owning operation ends.
+func NewHTTPClientWithProxy(proxy SOCKS5Proxy) (ManagedHTTPClient, error) {
+	proxy.Addr = strings.TrimSpace(proxy.Addr)
+	host, port, err := net.SplitHostPort(proxy.Addr)
+	p, portErr := strconv.Atoi(port)
+	if err != nil || host == "" || portErr != nil || p < 1 || p > 65535 {
+		return nil, errors.New("invalid E911 SOCKS5 proxy address")
+	}
+	if len(proxy.Username) > 255 || len(proxy.Password) > 255 || proxy.Password != "" && proxy.Username == "" {
+		return nil, errors.New("invalid E911 SOCKS5 proxy credentials")
+	}
+	transport := &http.Transport{
+		DialContext: func(ctx context.Context, _, target string) (net.Conn, error) {
+			return ipsec.DialSOCKS5TCP(ctx, proxy.Addr, target, proxy.Username, proxy.Password)
+		},
+		ForceAttemptHTTP2:     true,
+		MaxIdleConns:          8,
+		MaxIdleConnsPerHost:   2,
+		IdleConnTimeout:       90 * time.Second,
+		TLSHandshakeTimeout:   10 * time.Second,
+		ResponseHeaderTimeout: 20 * time.Second,
+	}
+	client := NewDefaultHTTPClient().(defaultHTTPClient)
+	client.client.Transport = transport
+	return client, nil
+}
+
+func (c defaultHTTPClient) CloseIdleConnections() {
+	if c.client != nil {
+		c.client.CloseIdleConnections()
+	}
 }
 func (c defaultHTTPClient) Do(req *HTTPRequest) (*HTTPResponse, error) {
 	ctx := context.Background()

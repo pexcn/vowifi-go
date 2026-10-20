@@ -275,8 +275,8 @@ func decodeSOCKS(b, want []byte) ([]byte, error) {
 
 // DialSOCKS5 performs real UDP ASSOCIATE and keeps its TCP control channel alive.
 func DialSOCKS5(ctx context.Context, proxy, target, user, password string) (DatagramConn, error) {
-	d := net.Dialer{}
-	tcp, e := d.DialContext(ctx, "tcp", proxy)
+	proxy = strings.TrimSpace(proxy)
+	tcp, relay, e := dialSOCKS5Command(ctx, proxy, "", user, password, 3)
 	if e != nil {
 		return nil, e
 	}
@@ -286,63 +286,6 @@ func DialSOCKS5(ctx context.Context, proxy, target, user, password string) (Data
 			tcp.Close()
 		}
 	}()
-	deadline := time.Now().Add(10 * time.Second)
-	if t, ok := ctx.Deadline(); ok && t.Before(deadline) {
-		deadline = t
-	}
-	tcp.SetDeadline(deadline)
-	methods := []byte{5, 1, 0}
-	if user != "" || password != "" {
-		methods = []byte{5, 1, 2}
-	}
-	if _, e = tcp.Write(methods); e != nil {
-		return nil, e
-	}
-	b := make([]byte, 2)
-	if _, e = io.ReadFull(tcp, b); e != nil {
-		return nil, e
-	}
-	if b[0] != 5 {
-		return nil, errors.New("SOCKS version mismatch")
-	}
-	switch b[1] {
-	case 0:
-		if len(methods) == 3 && methods[2] != 0 {
-			return nil, errors.New("proxy did not negotiate requested authentication")
-		}
-	case 2:
-		if len(user) > 255 || len(password) > 255 || user == "" {
-			return nil, errors.New("invalid SOCKS credentials")
-		}
-		req := append([]byte{1, byte(len(user))}, []byte(user)...)
-		req = append(req, byte(len(password)))
-		req = append(req, []byte(password)...)
-		if _, e = tcp.Write(req); e != nil {
-			return nil, e
-		}
-		if _, e = io.ReadFull(tcp, b); e != nil {
-			return nil, e
-		}
-		if b[0] != 1 || b[1] != 0 {
-			return nil, errors.New("SOCKS authentication failed")
-		}
-	default:
-		return nil, errors.New("SOCKS method rejected")
-	}
-	if _, e = tcp.Write([]byte{5, 3, 0, 1, 0, 0, 0, 0, 0, 0}); e != nil {
-		return nil, e
-	}
-	head := make([]byte, 3)
-	if _, e = io.ReadFull(tcp, head); e != nil {
-		return nil, e
-	}
-	if head[0] != 5 || head[1] != 0 || head[2] != 0 {
-		return nil, fmt.Errorf("SOCKS UDP ASSOCIATE rejected: %x", head)
-	}
-	relay, e := readSocksAddress(tcp)
-	if e != nil {
-		return nil, e
-	}
 	relayAddr, e := socksString(relay)
 	if e != nil {
 		return nil, e

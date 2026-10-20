@@ -90,6 +90,17 @@ func startATT(ctx context.Context, req Request) (WebsheetRequest, error) {
 		return WebsheetRequest{}, err
 	}
 	client := req.Client
+	if req.Proxy != nil {
+		if client != nil {
+			return WebsheetRequest{}, errors.New("E911 proxy cannot be combined with a custom HTTP client")
+		}
+		proxied, err := NewHTTPClientWithProxy(*req.Proxy)
+		if err != nil {
+			return WebsheetRequest{}, err
+		}
+		defer proxied.CloseIdleConnections()
+		client = proxied
+	}
 	if client == nil {
 		client = NewDefaultHTTPClient()
 	}

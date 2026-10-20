@@ -235,7 +235,11 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		// Normalize to one resolved numeric peer before constructing SOCKS UDP
 		// headers. A proxy may return the numeric source for a domain target;
 		// authenticating an arbitrary relay-provided address is not acceptable.
-		peer, ips, resolveErr := resolveEPDGUsingDNS(childCtx, remote, c.DNSServer)
+		if c.Proxy != nil && c.Proxy.Enabled && c.Proxy.Type != "" && c.Proxy.Type != "socks5" {
+			cancel()
+			return nil, errors.New("SWu requires SOCKS5 UDP ASSOCIATE proxy")
+		}
+		peer, ips, resolveErr := resolveEPDGWithProxy(childCtx, remote, c.DNSServer, c.Proxy)
 		if resolveErr != nil {
 			cancel()
 			return nil, resolveErr
@@ -243,10 +247,6 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		s.RemoteAddr, s.EPDGIPs = peer, ips
 		remote = peer
 		if c.Proxy != nil && c.Proxy.Enabled {
-			if c.Proxy.Type != "" && c.Proxy.Type != "socks5" {
-				cancel()
-				return nil, errors.New("SWu requires SOCKS5 UDP ASSOCIATE proxy")
-			}
 			proxy := c.Proxy.Addr
 			if proxy == "" {
 				proxy = c.Proxy.Address
@@ -973,14 +973,6 @@ func resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
 }
 
 func resolveEPDGUsingDNS(ctx context.Context, remote, dnsServer string) (string, []net.IP, error) {
-	host, port, e := net.SplitHostPort(remote)
-	if e != nil {
-		return "", nil, fmt.Errorf("invalid ePDG endpoint: %w", e)
-	}
-	numericPort, e := net.LookupPort("udp", port)
-	if e != nil || numericPort < 1 || numericPort > 65535 {
-		return "", nil, errors.New("invalid ePDG UDP port")
-	}
 	resolver := net.DefaultResolver
 	if dnsServer = strings.TrimSpace(dnsServer); dnsServer != "" {
 		if _, _, err := net.SplitHostPort(dnsServer); err != nil {
@@ -989,6 +981,18 @@ func resolveEPDGUsingDNS(ctx context.Context, remote, dnsServer string) (string,
 		resolver = &net.Resolver{PreferGo: true, Dial: func(c context.Context, network, _ string) (net.Conn, error) {
 			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(c, network, dnsServer)
 		}}
+	}
+	return resolveEPDGWithResolver(ctx, remote, resolver)
+}
+
+func resolveEPDGWithResolver(ctx context.Context, remote string, resolver *net.Resolver) (string, []net.IP, error) {
+	host, port, e := net.SplitHostPort(remote)
+	if e != nil {
+		return "", nil, fmt.Errorf("invalid ePDG endpoint: %w", e)
+	}
+	numericPort, e := net.LookupPort("udp", port)
+	if e != nil || numericPort < 1 || numericPort > 65535 {
+		return "", nil, errors.New("invalid ePDG UDP port")
 	}
 	addresses, e := resolver.LookupIPAddr(ctx, host)
 	if e != nil {

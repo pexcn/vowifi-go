@@ -40,18 +40,35 @@ type HTTPClient interface {
 type ContextHTTPClient interface {
 	DoContext(context.Context, *HTTPRequest) (*HTTPResponse, error)
 }
+
+// ManagedHTTPClient owns an HTTP connection pool that its caller can release.
+type ManagedHTTPClient interface {
+	HTTPClient
+	ContextHTTPClient
+	CloseIdleConnections()
+}
 type TraceSink interface {
 	Request(*HTTPRequest)
 	Response(*HTTPRequest, *HTTPResponse)
 	Error(*HTTPRequest, error)
 }
 type Identity struct{ IMSI, IMEI, MCC, MNC, SIPUsername, DisplayName, CachedToken string }
+
+// SOCKS5Proxy routes entitlement HTTPS and target DNS through a selected proxy.
+// A non-nil Request.Proxy is mandatory: failures never fall back to direct HTTP.
+type SOCKS5Proxy struct {
+	Addr, Username, Password string
+}
+
 type Request struct {
 	Carrier     carrier.EffectiveCarrierConfig
 	Identity    Identity
 	AKAProvider sim.AKAProvider
 	Client      HTTPClient
 	Trace       TraceSink
+	// Proxy selects the built-in proxied client. Combining it with a custom
+	// Client is rejected because that client's routing cannot be enforced here.
+	Proxy *SOCKS5Proxy
 }
 type WebsheetRequest struct{ URL, UserData, ContentType, Title string }
 
