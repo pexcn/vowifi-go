@@ -17,6 +17,7 @@ import (
 var ErrRecovering = errors.New("IMS registration recovering")
 var ErrFlowChanged = errors.New("IMS transport generation changed")
 var errTransactionTimeout = errors.New("SIP transaction timeout")
+var errSecurityReauthentication = errors.New("IMS security reauthentication requires a fresh flow")
 
 type flowError struct{ cause error }
 
@@ -155,7 +156,9 @@ func (s *Service) recoveryDelay(cause error, failures int) (time.Duration, bool)
 func recoverableRegistration(err error) bool {
 	var flow *flowError
 	var rejection *registrationError
-	return errors.As(err, &flow) || errors.As(err, &rejection) || errors.Is(err, errTransactionTimeout) || errors.Is(err, ErrFlowChanged) || errors.Is(err, context.DeadlineExceeded)
+	return errors.As(err, &flow) || errors.As(err, &rejection) ||
+		errors.Is(err, errTransactionTimeout) || errors.Is(err, ErrFlowChanged) ||
+		errors.Is(err, context.DeadlineExceeded) || errors.Is(err, errSecurityReauthentication)
 }
 func (s *Service) waitRecovery(delay time.Duration) bool {
 	timer := time.NewTimer(max(delay, 0))
@@ -323,8 +326,14 @@ func (s *Service) recoverRegistration(cause error) error {
 		failed := s.targetIndex
 		s.mu.Unlock()
 		target := &s.targets[failed]
-		target.failures = min(target.failures+1, 32)
-		delay, rotate := s.recoveryDelay(cause, target.failures)
+		// Reauthentication keeps this P-CSCF without a failure cooldown.
+		// The shared recovery path closes IMS before installing fresh SAs.
+		var delay time.Duration
+		var rotate bool
+		if !errors.Is(cause, errSecurityReauthentication) {
+			target.failures = min(target.failures+1, 32)
+			delay, rotate = s.recoveryDelay(cause, target.failures)
+		}
 		target.notBefore = time.Now().Add(delay)
 		index := failed
 		for {

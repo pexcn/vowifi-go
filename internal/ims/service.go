@@ -848,13 +848,15 @@ func (s *Service) register(ctx context.Context) error {
 				if s.cfg.SecurityClient == nil || s.cfg.InstallSecurity == nil {
 					return ErrUnsupportedSecurity
 				}
-				if protected {
-					s.setReady(false, ErrRecovering)
-				}
 				client := *s.cfg.SecurityClient
 				server, e := selectSecurity(raw, client, s.cfg.SecurityClientAlternatives...)
 				if e != nil {
 					return fmt.Errorf("IMS REGISTER Security-Server: %w", e)
+				}
+				if protected {
+					// Validate AKA and the offer before abandoning the old flow.
+					// Rebuild IMS before replacing its SAs or protected listener.
+					return errSecurityReauthentication
 				}
 				client.Algorithm, client.Encryption = server.Algorithm, server.Encryption
 				dial, e := s.cfg.InstallSecurity(ctx, SecurityAgreement{Client: client, Server: server, CK: append([]byte(nil), ar.CK...), IK: append([]byte(nil), ar.IK...), RemoteAddress: s.remote})
