@@ -957,7 +957,7 @@ func (s *Service) handleRequest(m *message) {
 		_ = s.write(r)
 	case "MESSAGE":
 		s.receiveSMS(m)
-	case "INVITE", "INFO", "BYE", "CANCEL", "ACK":
+	case "INVITE", "INFO", "BYE", "CANCEL", "ACK", "PRACK", "UPDATE":
 		s.receiveUSSD(m)
 	default:
 		_ = s.write(response(m, 405, "Method Not Allowed"))

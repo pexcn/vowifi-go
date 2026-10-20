@@ -17,6 +17,7 @@ import (
 
 type VoiceConfig struct {
 	DeviceID, LocalAddress string
+	EnableCallControl      bool
 	ListenPacket           func(context.Context, string, string) (net.PacketConn, error)
 	NotifyIncoming         func(caller, callee string)
 }
@@ -25,6 +26,7 @@ type VoiceAgent struct {
 	cfg       VoiceConfig
 	mu        sync.Mutex
 	calls     map[string]*voiceCall
+	live      map[string]*liveCall
 	rejected  map[string]*message
 	completed map[string]completedVoiceCall
 	ctx       context.Context
@@ -38,6 +40,8 @@ type completedVoiceCall struct {
 
 type voiceCall struct {
 	mu             sync.Mutex
+	byeMu          sync.Mutex
+	live           *liveCall
 	invite, answer *message
 	target         string
 	done           chan struct{}
@@ -63,7 +67,7 @@ func NewVoiceAgent(s *Service, cfg VoiceConfig) (*VoiceAgent, error) {
 		return nil, errors.New("IMS voice agent already installed")
 	}
 	ctx, cancel := context.WithCancel(s.ctx)
-	a := &VoiceAgent{service: s, cfg: cfg, calls: make(map[string]*voiceCall), rejected: make(map[string]*message), completed: make(map[string]completedVoiceCall), ctx: ctx, cancel: cancel}
+	a := &VoiceAgent{service: s, cfg: cfg, calls: make(map[string]*voiceCall), live: make(map[string]*liveCall), rejected: make(map[string]*message), completed: make(map[string]completedVoiceCall), ctx: ctx, cancel: cancel}
 	s.voice = a
 	return a, nil
 }
@@ -118,7 +122,11 @@ func calleeURI(callee, realm string) (string, error) {
 	}
 	return "sip:" + callee + "@" + realm + ";user=phone", nil
 }
-func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCallRequest) (res voicehost.SimulateCallResult, err error) {
+func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCallRequest) (voicehost.SimulateCallResult, error) {
+	return a.runOutgoing(ctx, req, nil)
+}
+
+func (a *VoiceAgent) runOutgoing(ctx context.Context, req voicehost.SimulateCallRequest, live *liveCall) (res voicehost.SimulateCallResult, err error) {
 	if ctx == nil {
 		ctx = context.Background()
 	}
@@ -149,12 +157,33 @@ func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCal
 		return res, e
 	}
 	defer audio.Close()
+	if live != nil {
+		audio.Local.Codecs, audio.Local.Params, e = media.CodecOffer(live.request.Codecs)
+		if e != nil {
+			return res, e
+		}
+		addTelephoneEvents(audio)
+		if live.request.Secure {
+			audio.Local.Crypto, e = media.NewSDESCrypto()
+			if e != nil {
+				return res, e
+			}
+		}
+	}
 	offer, e := audio.Local.SDP()
 	if e != nil {
 		return res, e
 	}
 	callID := token()
-	c := &voiceCall{target: uri, done: make(chan struct{}), media: audio, cancel: cancel}
+	if live != nil {
+		callID = live.id
+	}
+	c := &voiceCall{target: uri, done: make(chan struct{}), media: audio, cancel: cancel, live: live}
+	if live != nil {
+		live.mu.Lock()
+		live.call = c
+		live.mu.Unlock()
+	}
 	a.mu.Lock()
 	if a.closed || len(a.calls) > 0 {
 		a.mu.Unlock()
@@ -250,6 +279,12 @@ func (a *VoiceAgent) SimulateCall(ctx context.Context, req voicehost.SimulateCal
 	if req.OnConnected != nil {
 		req.OnConnected()
 	}
+	if live != nil {
+		live.connected(audio)
+		err = live.serve(ctx, audio, c.done)
+		res.Success = err == nil
+		return res, err
+	}
 	mediaCtx, mediaCancel := context.WithCancel(ctx)
 	defer mediaCancel()
 	mediaErr := make(chan error, 1)
@@ -280,9 +315,8 @@ func (a *VoiceAgent) challenge(ctx context.Context, m, r *message) error {
 	if e != nil {
 		return e
 	}
-	if ch.Realm != a.service.cfg.Realm {
-		return errors.New("voice digest realm mismatch")
-	}
+	// The authenticated carrier Digest protection space may differ from IMPI.
+	// akaPassword still validates the challenge through the SIM.
 	aka, e := akaPassword(ctx, a.service.cfg.SIM, ch)
 	if e != nil {
 		return e
@@ -481,7 +515,7 @@ func (a *VoiceAgent) ack(c *voiceCall, r *message) error {
 	}
 	m := a.dialogRequest(c, "ACK")
 	c.mu.Lock()
-	m.set("cseq", strings.Fields(c.invite.get("cseq"))[0]+" ACK")
+	m.set("cseq", strings.Fields(r.get("cseq"))[0]+" ACK")
 	m.set("to", r.get("to"))
 	c.mu.Unlock()
 	if e := a.service.authorize(m); e != nil {
@@ -489,7 +523,10 @@ func (a *VoiceAgent) ack(c *voiceCall, r *message) error {
 	}
 	return a.service.write(m)
 }
-func (a *VoiceAgent) bye(c *voiceCall) error {
+func (a *VoiceAgent) bye(c *voiceCall) error { return a.byeWithContext(context.Background(), c) }
+func (a *VoiceAgent) byeWithContext(parent context.Context, c *voiceCall) error {
+	c.byeMu.Lock()
+	defer c.byeMu.Unlock()
 	select {
 	case <-c.done:
 		return nil
@@ -505,7 +542,7 @@ func (a *VoiceAgent) bye(c *voiceCall) error {
 	if e := a.service.authorize(m); e != nil {
 		return e
 	}
-	ctx, cancel := context.WithTimeout(context.Background(), a.service.cfg.TransactionTimeout)
+	ctx, cancel := context.WithTimeout(parent, a.service.cfg.TransactionTimeout)
 	defer cancel()
 	r, e := a.service.transact(ctx, m)
 	if e != nil {
@@ -560,6 +597,9 @@ func (s *Service) receiveVoice(m *message) bool {
 	cached := a.rejected[id]
 	a.mu.Unlock()
 	if c != nil {
+		if c.live != nil && a.handleLiveRequest(c.live, m) {
+			return true
+		}
 		switch m.method() {
 		case "BYE":
 			c.mu.Lock()
@@ -595,6 +635,9 @@ func (s *Service) receiveVoice(m *message) bool {
 	}
 	if m.method() != "INVITE" || !strings.HasPrefix(strings.ToLower(m.get("content-type")), "application/sdp") {
 		return false
+	}
+	if a.cfg.EnableCallControl {
+		return a.receiveIncoming(m)
 	}
 	if _, e := media.ParseSDP(m.Body); e != nil {
 		_ = s.write(response(m, 488, "Not Acceptable Here"))

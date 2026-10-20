@@ -34,7 +34,7 @@ func registerVoice(ctx context.Context, req StartRequest, inst *Instance, svc *i
 	if err != nil {
 		return err
 	}
-	agent, err := ims.NewVoiceAgent(svc, ims.VoiceConfig{DeviceID: req.DeviceID, LocalAddress: host, ListenPacket: network.ListenPacket, NotifyIncoming: func(caller, callee string) { req.VoiceGateway.NotifyIncomingCall(req.DeviceID, caller, callee) }})
+	agent, err := ims.NewVoiceAgent(svc, ims.VoiceConfig{EnableCallControl: true, DeviceID: req.DeviceID, LocalAddress: host, ListenPacket: network.ListenPacket, NotifyIncoming: func(caller, callee string) { req.VoiceGateway.NotifyIncomingCall(req.DeviceID, caller, callee) }})
 	if err != nil {
 		return err
 	}
