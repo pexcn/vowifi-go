@@ -166,7 +166,7 @@ func (s *Service) allocateReference(r smsReference) (byte, error) {
 func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendResult, error) {
 	res := SendResult{MessageID: token()}
 	if !s.Ready() {
-		return res, ErrNotReady
+		return res, errors.Join(messaging.ErrSendNotAttempted, ErrNotReady)
 	}
 	if !validSMSRecipient(to) {
 		return res, errors.New("SMS recipient must be a phone number")
@@ -270,8 +270,13 @@ func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendR
 		}
 		r, e := s.transact(ctx, m)
 		if e != nil {
-			e = errors.Join(messaging.ErrSendOutcomeUnknown, e)
-			part.State = "unknown" // a lost SIP response does not prove rejection
+			if errors.Is(e, messaging.ErrSendNotAttempted) {
+				release()
+				part.State = "failed"
+			} else {
+				e = errors.Join(messaging.ErrSendOutcomeUnknown, e)
+				part.State = "unknown"
+			} // a lost SIP response does not prove rejection
 			res.Parts = append(res.Parts, part)
 			if s.cfg.OnPart != nil {
 				if storeErr := s.cfg.OnPart(res.MessageID, part); storeErr != nil {

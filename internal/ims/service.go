@@ -47,6 +47,7 @@ type Config struct {
 	LocalAddress                               string
 	Expires, KeepAlive, TransactionTimeout     time.Duration
 	RecoveryInitial, RecoveryMax               time.Duration
+	SIPTimerT1, SIPTimerT2                     time.Duration
 	TemporaryStatusCodes, ForbiddenStatusCodes []int
 	OnSMS                                      func(sender, text string, at time.Time)
 	OnReport                                   func(Report)
@@ -222,6 +223,15 @@ func New(c Config) (*Service, error) {
 	}
 	c.TemporaryStatusCodes = append([]int{}, c.TemporaryStatusCodes...)
 	c.ForbiddenStatusCodes = append([]int{}, c.ForbiddenStatusCodes...)
+	if c.SIPTimerT1 <= 0 {
+		c.SIPTimerT1 = 500 * time.Millisecond
+	}
+	if c.SIPTimerT2 <= 0 {
+		c.SIPTimerT2 = 4 * time.Second
+	}
+	if c.SIPTimerT2 < c.SIPTimerT1 || c.SIPTimerT2 > 16*time.Second {
+		return nil, errors.New("invalid SIP retransmission timers")
+	}
 	if c.TransactionTimeout <= 0 {
 		c.TransactionTimeout = 32 * time.Second
 	}
@@ -550,21 +560,24 @@ func (s *Service) readLoop(c net.Conn, g uint64) {
 	}
 }
 func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
+	if err := ctx.Err(); err != nil {
+		return nil, errors.Join(messaging.ErrSendNotAttempted, err)
+	}
 	key := transactionKey(m)
 	ch := make(chan *message, 8)
 	s.mu.Lock()
 	c, g, flowCtx := s.conn, s.generation, s.flowCtx
 	if m.generation != 0 && m.generation != g {
 		s.mu.Unlock()
-		return nil, ErrFlowChanged
+		return nil, errors.Join(messaging.ErrSendNotAttempted, ErrFlowChanged)
 	}
 	if m.method() != "REGISTER" && (!s.ready || !time.Now().Before(s.registeredUntil)) {
 		s.mu.Unlock()
-		return nil, ErrNotReady
+		return nil, errors.Join(messaging.ErrSendNotAttempted, ErrNotReady)
 	}
 	if c == nil || flowCtx == nil {
 		s.mu.Unlock()
-		return nil, ErrNotReady
+		return nil, errors.Join(messaging.ErrSendNotAttempted, ErrNotReady)
 	}
 	s.pending[key] = ch
 	serviceCtx := s.ctx
@@ -580,9 +593,17 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 	}
 	timeout := time.NewTimer(s.cfg.TransactionTimeout)
 	defer timeout.Stop()
-	retry := time.NewTimer(500 * time.Millisecond)
+	t1, t2 := s.cfg.SIPTimerT1, s.cfg.SIPTimerT2
+	if t1 <= 0 {
+		t1 = 500 * time.Millisecond
+	}
+	if t2 <= 0 {
+		t2 = 4 * time.Second
+	}
+	retry := time.NewTimer(t1)
 	defer retry.Stop()
-	interval := 500 * time.Millisecond
+	interval := t1
+	proceeding := false
 	for {
 		select {
 		case <-ctx.Done():
@@ -611,9 +632,10 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 					s.transportFailure(c, g, e)
 					return nil, e
 				}
-				interval *= 2
-				if interval > 4*time.Second {
-					interval = 4 * time.Second
+				if proceeding {
+					interval = t2
+				} else {
+					interval = min(interval*2, t2)
 				}
 				retry.Reset(interval)
 			}
@@ -621,6 +643,16 @@ func (s *Service) transact(ctx context.Context, m *message) (*message, error) {
 			if r.status() < 200 {
 				if m.method() == "INVITE" {
 					retry.Stop()
+				} else if s.cfg.Transport == "udp" && !proceeding {
+					proceeding = true
+					interval = t2
+					if !retry.Stop() {
+						select {
+						case <-retry.C:
+						default:
+						}
+					}
+					retry.Reset(t2)
 				}
 				continue
 			}
@@ -693,6 +725,14 @@ func (s *Service) register(ctx context.Context) error {
 	s.mu.Lock()
 	authenticated := len(s.password) > 0
 	s.mu.Unlock()
+	s.mu.Lock()
+	protected := s.securityVerify != ""
+	s.mu.Unlock()
+	if protected {
+		if err := s.rotateSecurityOffer(); err != nil {
+			return err
+		}
+	}
 	var auts string
 	for round := 0; round < 5; round++ {
 		s.mu.Lock()
@@ -806,6 +846,9 @@ func (s *Service) register(ctx context.Context) error {
 			if raw := strings.Join(r.Headers["security-server"], ","); raw != "" && auts == "" {
 				if s.cfg.SecurityClient == nil || s.cfg.InstallSecurity == nil {
 					return ErrUnsupportedSecurity
+				}
+				if protected {
+					s.setReady(false, ErrRecovering)
 				}
 				client := *s.cfg.SecurityClient
 				server, e := selectSecurity(raw, client, s.cfg.SecurityClientAlternatives...)

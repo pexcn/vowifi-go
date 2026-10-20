@@ -231,6 +231,10 @@ func (s *Service) resetRegistration() error {
 	if closed || s.ctx.Err() != nil {
 		return context.Canceled
 	}
+	return s.rotateSecurityOffer()
+}
+
+func (s *Service) rotateSecurityOffer() error {
 	// A new registration must not reuse the previous association's SPIs or
 	// local protected ports. Algorithm offers and carrier restrictions remain.
 	if s.cfg.SecurityClient != nil {

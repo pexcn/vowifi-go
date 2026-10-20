@@ -7,6 +7,10 @@ import (
 	"time"
 )
 
+// ErrSendNotAttempted proves no submission bytes were written. Only this
+// classification can be replayed automatically, with an idempotency key.
+var ErrSendNotAttempted = errors.New("SMS submission was not attempted")
+
 var ErrDeliveryNotFound = errors.New("sms delivery not found")
 
 // ErrSendOutcomeUnknown means the submission may have reached the network.
