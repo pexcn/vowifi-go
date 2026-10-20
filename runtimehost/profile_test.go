@@ -52,10 +52,10 @@ func TestCarrierProfileExplicitPRFAndStrictPairing(t *testing.T) {
 		ike, esp string
 		want     swu.IKEProfile
 	}{
-		{"aes256-sha256-prfsha1-modp2048", "aes256-sha256", swu.IKEProfile{256, vc.PRFSHA1, vc.HMACSHA256128, 14}},
-		{"aes128-sha1-prfsha256-modp2048", "aes128-sha1", swu.IKEProfile{128, vc.PRFSHA256, vc.HMACSHA196, 14}},
-		{" AES128-SHA1-PRFSHA1-MODP1024 ", " AES128-SHA1 ", swu.IKEProfile{128, vc.PRFSHA1, vc.HMACSHA196, 2}},
-		{"aes128-sha256-prfsha256-modp2048", "aes128-sha256", swu.IKEProfile{128, vc.PRFSHA256, vc.HMACSHA256128, 14}},
+		{"aes256-sha256-prfsha1-modp2048", "aes256-sha256", swu.IKEProfile{EncryptionKeyBits: 256, PRF: vc.PRFSHA1, Integrity: vc.HMACSHA256128, DHGroup: 14}},
+		{"aes128-sha1-prfsha256-modp2048", "aes128-sha1", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA256, Integrity: vc.HMACSHA196, DHGroup: 14}},
+		{" AES128-SHA1-PRFSHA1-MODP1024 ", " AES128-SHA1 ", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA1, Integrity: vc.HMACSHA196, DHGroup: 2}},
+		{"aes128-sha256-prfsha256-modp2048", "aes128-sha256", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA256, Integrity: vc.HMACSHA256128, DHGroup: 14}},
 		{"aes256-sha256-prfsha512-modp2048", "aes256-sha256", swu.IKEProfile{}},
 		{"aes256-sha256-prfunknown-modp2048", "aes256-sha256", swu.IKEProfile{}},
 		{"aes256-sha256-prfsha1-modp3072", "aes256-sha256", swu.IKEProfile{}},
@@ -79,7 +79,7 @@ func TestCarrierProfileExplicitPRFAndStrictPairing(t *testing.T) {
 			if err != nil {
 				t.Fatal(err)
 			}
-			p := swu.IKEProfile{got.EncryptionKeyBits, got.PRF, got.Integrity, got.DHGroup}
+			p := swu.IKEProfile{EncryptionKeyBits: got.EncryptionKeyBits, PRF: got.PRF, Integrity: got.Integrity, DHGroup: got.DHGroup}
 			if p != tc.want {
 				t.Fatalf("profile = %+v, want %+v", p, tc.want)
 			}
