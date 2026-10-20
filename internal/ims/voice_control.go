@@ -212,11 +212,29 @@ func (a *VoiceAgent) Hangup(ctx context.Context, id string) error {
 	if err != nil {
 		return err
 	}
-	l.operation.Lock()
+	var c *voiceCall
+	var original *message
+	var state string
+	for {
+		l.operation.Lock()
+		l.mu.Lock()
+		c, original, state = l.call, l.original, l.info.State
+		l.mu.Unlock()
+		if original == nil || c == nil || state != "answering" {
+			break
+		}
+		// ACK processing needs operation to finish the Answer handoff.
+		// Release it while waiting, then recheck the call under the lock.
+		l.operation.Unlock()
+		select {
+		case <-l.ack:
+		case <-ctx.Done():
+			return ctx.Err()
+		case <-l.ctx.Done():
+			return nil
+		}
+	}
 	defer l.operation.Unlock()
-	l.mu.Lock()
-	c, original, state := l.call, l.original, l.info.State
-	l.mu.Unlock()
 	if state == "ended" {
 		return nil
 	}
@@ -228,16 +246,7 @@ func (a *VoiceAgent) Hangup(ctx context.Context, id string) error {
 		if err = a.service.write(reject); err != nil {
 			return err
 		}
-	} else if c != nil && (state == "connected" || state == "answering") {
-		if state == "answering" {
-			select {
-			case <-l.ack:
-			case <-ctx.Done():
-				return ctx.Err()
-			case <-l.ctx.Done():
-				return nil
-			}
-		}
+	} else if c != nil && state == "connected" {
 		if err = a.byeWithContext(ctx, c); err != nil {
 			return err
 		}
