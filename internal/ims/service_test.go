@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/iniwex5/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
 	smscodec "github.com/warthog618/sms"
 	"github.com/warthog618/sms/encoding/tpdu"
 )
@@ -400,8 +401,9 @@ func TestSIPRejectionAndTimeoutReturnErrors(t *testing.T) {
 				_, _ = readMessage(r)
 				return nil
 			})
-			cfg.TransactionTimeout = 50 * time.Millisecond
-			cfg.OnPart = func(_ string, _ SentPart) error { return nil }
+			cfg.TransactionTimeout = 250 * time.Millisecond
+			var persisted []SentPart
+			cfg.OnPart = func(_ string, p SentPart) error { persisted = append(persisted, p); return nil }
 			s, err := New(cfg)
 			if err != nil {
 				t.Fatal(err)
@@ -411,8 +413,18 @@ func TestSIPRejectionAndTimeoutReturnErrors(t *testing.T) {
 			}
 			defer s.Close()
 			out, err := s.SendSMS(context.Background(), "10086", "hello", "")
-			if err == nil || len(out.Parts) != 1 || out.Parts[0].State != "failed" {
-				t.Fatalf("failed SMS %#v %v", out, err)
+			wantState, wantCode := "unknown", 0
+			if reject {
+				wantState, wantCode = "failed", 403
+			}
+			if err == nil || len(out.Parts) != 1 || out.Parts[0].State != wantState || out.Parts[0].SIPCode != wantCode {
+				t.Fatalf("SMS outcome %#v %v, want %s/%d", out, err, wantState, wantCode)
+			}
+			if errors.Is(err, messaging.ErrSendOutcomeUnknown) == reject {
+				t.Fatalf("incorrect unknown-outcome classification: %v", err)
+			}
+			if len(persisted) != 2 || persisted[0].State != "pending" || persisted[1].State != wantState {
+				t.Fatalf("persisted SMS outcomes %#v", persisted)
 			}
 		})
 	}
