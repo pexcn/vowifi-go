@@ -194,6 +194,8 @@ func classifyStartError(err error) string {
 		return "cancelled"
 	case errors.Is(err, context.DeadlineExceeded):
 		return "timeout"
+	case errors.Is(err, errUnsupportedCarrierProposals):
+		return "unsupported_carrier_proposals"
 	default:
 		return "protocol_or_transport_failed"
 	}

@@ -21,6 +21,8 @@ const (
 	imsESPHeadroom = 80
 )
 
+var errUnsupportedCarrierProposals = errors.New("carrier has no supported IKE/ESP pair")
+
 // Select a supported pair from the caller's resolved carrier proposals. The
 // current engine shares the CBC key size/integrity profile across IKE/Child SA;
 // it must not silently substitute an algorithm outside either offer.
@@ -62,31 +64,13 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 	}
 	var profiles []swu.IKEProfile
 	for _, proposal := range ikes {
-		var bits uint16
-		group := uint16(14)
-		var prf vc.PRF
-		var integrity vc.Integrity
-		var esp string
-		name := strings.ToLower(strings.TrimSpace(proposal))
-		if strings.HasSuffix(name, "-modp1024") {
-			group = 2
-			name = strings.TrimSuffix(name, "-modp1024") + "-modp2048"
-		}
-		switch name {
-		case "aes128-sha256-modp2048":
-			bits, prf, integrity, esp = 128, vc.PRFSHA256, vc.HMACSHA256128, "aes128-sha256"
-		case "aes256-sha256-modp2048":
-			bits, prf, integrity, esp = 256, vc.PRFSHA256, vc.HMACSHA256128, "aes256-sha256"
-		case "aes128-sha1-modp2048":
-			bits, prf, integrity, esp = 128, vc.PRFSHA1, vc.HMACSHA196, "aes128-sha1"
-		case "aes256-sha1-modp2048":
-			bits, prf, integrity, esp = 256, vc.PRFSHA1, vc.HMACSHA196, "aes256-sha1"
-		default:
+		profile, esp, ok := parseCarrierIKEProfile(proposal)
+		if !ok {
 			continue
 		}
 		for _, child := range esps {
 			if strings.EqualFold(strings.TrimSpace(child), esp) {
-				profiles = append(profiles, swu.IKEProfile{EncryptionKeyBits: bits, PRF: prf, Integrity: integrity, DHGroup: group})
+				profiles = append(profiles, profile)
 				break
 			}
 		}
@@ -96,7 +80,52 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 		cfg.IKEAlternatives = profiles[1:]
 		return cfg, nil
 	}
-	return swu.Config{}, fmt.Errorf("carrier has no supported IKE/ESP pair (requires AES-CBC SHA1/SHA256 DH14 or explicit DH2): IKE %v ESP %v", ikes, esps)
+	return swu.Config{}, fmt.Errorf("%w (requires AES-CBC, SHA1/SHA256 integrity and PRF, DH14 or explicit DH2): IKE %v ESP %v", errUnsupportedCarrierProposals, ikes, esps)
+}
+
+func parseCarrierIKEProfile(raw string) (swu.IKEProfile, string, bool) {
+	parts := strings.Split(strings.ToLower(strings.TrimSpace(raw)), "-")
+	if len(parts) != 3 && len(parts) != 4 {
+		return swu.IKEProfile{}, "", false
+	}
+	var p swu.IKEProfile
+	switch parts[0] {
+	case "aes128":
+		p.EncryptionKeyBits = 128
+	case "aes256":
+		p.EncryptionKeyBits = 256
+	default:
+		return swu.IKEProfile{}, "", false
+	}
+	switch parts[1] {
+	case "sha1":
+		p.Integrity, p.PRF = vc.HMACSHA196, vc.PRFSHA1
+	case "sha256":
+		p.Integrity, p.PRF = vc.HMACSHA256128, vc.PRFSHA256
+	default:
+		return swu.IKEProfile{}, "", false
+	}
+	// As in the original proposal parser, an explicit PRF is independent of
+	// integrity. Only the three-part form derives its PRF from integrity.
+	if len(parts) == 4 {
+		switch strings.TrimPrefix(parts[2], "prf") {
+		case "sha1":
+			p.PRF = vc.PRFSHA1
+		case "sha256":
+			p.PRF = vc.PRFSHA256
+		default:
+			return swu.IKEProfile{}, "", false
+		}
+	}
+	switch parts[len(parts)-1] {
+	case "modp2048":
+		p.DHGroup = 14
+	case "modp1024":
+		p.DHGroup = 2
+	default:
+		return swu.IKEProfile{}, "", false
+	}
+	return p, parts[0] + "-" + parts[1], true
 }
 
 func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security *ims.SecurityParameters) error {
