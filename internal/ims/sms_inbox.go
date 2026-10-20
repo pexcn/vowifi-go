@@ -81,7 +81,7 @@ func (s *Service) commitInboundAssembly(a messaging.InboundAssembly) (func(), er
 		key = f.Key
 		parts[i] = p
 	}
-	text, err := smscodec.Decode(parts)
+	text, err := decodeInboundParts(parts)
 	if err != nil {
 		return nil, err
 	}
@@ -94,7 +94,9 @@ func (s *Service) commitInboundAssembly(a messaging.InboundAssembly) (func(), er
 		return nil, err
 	}
 	return func() {
-		if s.cfg.OnStoredSMS != nil {
+		if s.cfg.OnStoredSMSWithID != nil {
+			s.cfg.OnStoredSMSWithID(a.ID, p.OA.Number(), string(text), p.SCTS.Time)
+		} else if s.cfg.OnStoredSMS != nil {
 			s.cfg.OnStoredSMS(p.OA.Number(), string(text), p.SCTS.Time)
 		}
 	}, nil

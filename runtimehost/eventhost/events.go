@@ -12,6 +12,7 @@ type Dispatcher interface {
 }
 
 type SMSReceived struct {
+	EventID   string // stable durable assembly ID, when available
 	IMSI      string
 	Persisted bool // host history was committed before network acknowledgement
 

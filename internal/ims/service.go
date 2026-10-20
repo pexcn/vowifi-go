@@ -22,11 +22,12 @@ import (
 )
 
 type Config struct {
-	SMSOwner         messaging.Subscription
-	ReliabilityStore messaging.ReliabilityStore
-	InboundStore     messaging.InboundStore
-	OnStoredSMS      func(sender, text string, at time.Time)
-	OnSMSStoreError  func(error)
+	SMSOwner          messaging.Subscription
+	ReliabilityStore  messaging.ReliabilityStore
+	InboundStore      messaging.InboundStore
+	OnStoredSMS       func(sender, text string, at time.Time)
+	OnStoredSMSWithID func(id, sender, text string, at time.Time)
+	OnSMSStoreError   func(error)
 
 	PrivateIdentity, PublicIdentity, Realm, SMSC string
 	PCSCF                                        []string

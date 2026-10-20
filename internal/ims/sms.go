@@ -163,8 +163,18 @@ func (s *Service) allocateReference(r smsReference) (byte, error) {
 	}
 	return 0, errors.New("all SMS RP references outstanding")
 }
-func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendResult, error) {
-	res := SendResult{MessageID: token()}
+func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (res SendResult, err error) {
+	defer func() {
+		if errors.Is(err, messaging.ErrSendNotAttempted) {
+			for _, part := range res.Parts {
+				if part.State == "accepted" || part.State == "unknown" {
+					err = errors.Join(messaging.ErrSendOutcomeUnknown, err)
+					break
+				}
+			}
+		}
+	}()
+	res = SendResult{MessageID: token()}
 	if !s.Ready() {
 		return res, errors.Join(messaging.ErrSendNotAttempted, ErrNotReady)
 	}
@@ -308,11 +318,12 @@ func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendR
 	return res, nil
 }
 func (s *Service) receiveSMS(m *message) {
-	if !strings.EqualFold(strings.TrimSpace(strings.Split(m.get("content-type"), ";")[0]), "application/vnd.3gpp.sms") {
+	body, e := smsBody(m)
+	if e != nil {
 		_ = s.write(response(m, 415, "Unsupported Media Type"))
 		return
 	}
-	rp, e := parseRP(m.Body)
+	rp, e := parseRP(body)
 	if e != nil || rp.Kind&1 == 0 {
 		_ = s.write(response(m, 400, "Bad Request"))
 		return
@@ -371,12 +382,12 @@ func (s *Service) receiveSMS(m *message) {
 				}
 			}
 		case tpdu.SmsDeliver:
-			alpha, e := p.DCS.Alphabet()
-			if e != nil || alpha == tpdu.Alpha8Bit {
+			_, e := p.DCS.Alphabet()
+			if e != nil {
 				_ = s.write(response(m, 415, "Unsupported Media Type"))
 				return
 			}
-			if _, e = smscodec.Decode([]*tpdu.TPDU{p}); e != nil && p.IsSingleSegment() {
+			if _, e = decodeInboundParts([]*tpdu.TPDU{p}); e != nil && p.IsSingleSegment() {
 				_ = s.write(response(m, 400, "Bad Request"))
 				return
 			}
@@ -451,7 +462,7 @@ func (s *Service) deliverTPDU(p *tpdu.TPDU) {
 		delete(s.concats, key)
 		s.smsMu.Unlock()
 	}
-	text, e := smscodec.Decode(parts)
+	text, e := decodeInboundParts(parts)
 	if e != nil || !utf8.Valid(text) {
 		return
 	}

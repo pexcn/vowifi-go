@@ -138,8 +138,8 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	imsCfg.OnSMS = func(sender, text string, at time.Time) {
 		inst.Dispatch(ctx, eventhost.SMSReceived{IMSI: req.Profile.IMSI, DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
 	}
-	imsCfg.OnStoredSMS = func(sender, text string, at time.Time) {
-		inst.Dispatch(ctx, eventhost.SMSReceived{IMSI: req.Profile.IMSI, Persisted: true, DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
+	imsCfg.OnStoredSMSWithID = func(id, sender, text string, at time.Time) {
+		inst.Dispatch(ctx, eventhost.SMSReceived{EventID: id, IMSI: req.Profile.IMSI, Persisted: true, DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
 	}
 	installDeliveryCallbacks(&imsCfg, req)
 	svc, err := ims.New(imsCfg)
@@ -274,6 +274,10 @@ type messagingService struct {
 	dispatch eventhost.Dispatcher
 	deviceID string
 	imsi     string
+}
+
+func (s *messagingService) Subscription() messaging.Subscription {
+	return messaging.Subscription{DeviceID: s.deviceID, IMSI: s.imsi}
 }
 
 func (s *messagingService) SendSMSWithOptions(ctx context.Context, to, text string, options messaging.SendOptions) (messaging.SendOutcome, error) {
