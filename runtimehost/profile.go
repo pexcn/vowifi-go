@@ -43,6 +43,7 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 		}
 	}
 	cfg := swu.Config{DeviceID: req.DeviceID, TraceID: req.TraceID, EPDGAddr: epdg, DataplaneMode: req.Dataplane.Mode, Proxy: toSWUProxy(req.Proxy), Identity: p.IMSIdentity, SIM: req.SIM, NAI: fmt.Sprintf("0%s@nai.epc.mnc%s.mcc%s.3gppnetwork.org", p.Profile.IMSI, mnc, p.Profile.MCC), APN: params.APN, DPDInterval: time.Duration(params.DPDIntervalSeconds) * time.Second}
+	cfg.OnDiagnostic = swuDiagnosticLogger()
 	// SWu peers may authenticate solely through mutual EAP-AKA (RFC 5998).
 	// If a peer sends certificate AUTH instead, the engine still verifies it.
 	cfg.EAPOnlyAuthentication = true

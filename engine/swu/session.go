@@ -27,6 +27,9 @@ import (
 var ErrRekeyRequired = errors.New("SWu SA cannot be renewed; reconnect required")
 
 type Config struct {
+	// OnDiagnostic receives startup DNS and IKE results without authentication
+	// payloads or key material. Nil disables diagnostic collection.
+	OnDiagnostic func(Diagnostic)
 	// EAPOnlyAuthentication offers RFC 5998 in the first IKE_AUTH request.
 	// A missing initial certificate AUTH may then defer authentication until
 	// mutual EAP-AKA and the final MSK-based responder AUTH both succeed.
@@ -239,7 +242,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 			cancel()
 			return nil, errors.New("SWu requires SOCKS5 UDP ASSOCIATE proxy")
 		}
-		peer, ips, resolveErr := resolveEPDGWithProxy(childCtx, remote, c.DNSServer, c.Proxy)
+		peer, ips, resolveErr := c.resolveEPDG(childCtx, remote)
 		if resolveErr != nil {
 			cancel()
 			return nil, resolveErr
@@ -274,8 +277,10 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		case <-watchDone:
 		}
 	}()
+	handshakeStarted := time.Now()
 	err = s.handshake()
 	close(watchDone)
+	s.reportHandshake(handshakeStarted, err)
 	if err != nil {
 		s.fail(err)
 		return nil, err
@@ -740,7 +745,7 @@ func (s *Session) authenticate() error {
 					return e
 				}
 				if typ < 16384 {
-					return fmt.Errorf("IKE_AUTH error notify %d", typ)
+					return &ikeAuthNotifyError{typ: typ}
 				}
 			}
 		}
@@ -974,10 +979,7 @@ func resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
 
 func resolveEPDGUsingDNS(ctx context.Context, remote, dnsServer string) (string, []net.IP, error) {
 	resolver := net.DefaultResolver
-	if dnsServer = strings.TrimSpace(dnsServer); dnsServer != "" {
-		if _, _, err := net.SplitHostPort(dnsServer); err != nil {
-			dnsServer = net.JoinHostPort(strings.Trim(dnsServer, "[]"), "53")
-		}
+	if dnsServer = normalizeDNSServer(dnsServer); dnsServer != "" {
 		resolver = &net.Resolver{PreferGo: true, Dial: func(c context.Context, network, _ string) (net.Conn, error) {
 			return (&net.Dialer{Timeout: 3 * time.Second}).DialContext(c, network, dnsServer)
 		}}
