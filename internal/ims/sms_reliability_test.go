@@ -390,3 +390,48 @@ func TestSMSRPStorageFailureRetainsPendingReference(t *testing.T) {
 		t.Fatal("failed report persistence could not be retried")
 	}
 }
+
+func TestSMSPartialSubmissionNeverBecomesSafelyRetryable(t *testing.T) {
+	cfg := configPeer(t, func(conn net.Conn) error {
+		reader := bufio.NewReader(conn)
+		auth, err := peerRegister(reader, conn)
+		if err != nil {
+			return err
+		}
+		if err = sendPeer(conn, response(auth, 200, "OK")); err != nil {
+			return err
+		}
+		message, err := readMessage(reader)
+		if err != nil {
+			return err
+		}
+		if message.method() != "MESSAGE" {
+			return fmt.Errorf("expected SMS, got %s", message.Start)
+		}
+		if err = sendPeer(conn, response(message, 202, "Accepted")); err != nil {
+			return err
+		}
+		_, _ = readMessage(reader)
+		return nil
+	})
+	var service *Service
+	cfg.OnPart = func(_ string, part SentPart) error {
+		if part.State == "accepted" {
+			service.setReady(false, ErrRecovering)
+		}
+		return nil
+	}
+	var err error
+	service, err = New(cfg)
+	if err != nil {
+		t.Fatal(err)
+	}
+	defer service.Close()
+	if err = service.Start(t.Context()); err != nil {
+		t.Fatal(err)
+	}
+	result, err := service.SendSMS(t.Context(), "+1234567890", strings.Repeat("x", 320), "auto")
+	if len(result.Parts) < 2 || !errors.Is(err, messaging.ErrSendOutcomeUnknown) {
+		t.Fatalf("partial SMS incorrectly retryable: %+v %v", result, err)
+	}
+}
