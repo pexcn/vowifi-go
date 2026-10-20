@@ -107,7 +107,7 @@ func (s *Session) activateIKE(next *ikeAssociation) {
 	}
 }
 func (s *Session) ikeRekeyProposal(spi uint64) ikev2.Proposal {
-	proposal := (IKEProfile{uint16(s.encLen * 8), s.prf, s.integ, s.keyExchangeGroup}).proposal(1)
+	proposal := (IKEProfile{EncryptionKeyBits: s.protection().KeyBits(s.encLen), PRF: s.prf, Integrity: s.integ, DHGroup: s.keyExchangeGroup, Encryption: s.protection().Encryption}).proposal(1)
 	proposal.SPI = binary.BigEndian.AppendUint64(nil, spi)
 	return proposal
 }

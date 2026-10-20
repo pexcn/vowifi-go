@@ -107,10 +107,17 @@ func (fb *fragmentBuffer) add(f ikev2.Fragment, now time.Time) (ikev2.Message, b
 }
 
 func (s *Session) sealIKE(h ikev2.Header, ps []ikev2.Payload, enc, auth []byte) ([][]byte, error) {
-	if s.fragmentation {
-		return ikev2.SealFragments(h, ps, enc, auth, s.integ, s.cfg.Random, ikeFragmentPacketLimit)
+	return s.sealIKEAt(h, ps, enc, auth, s.fragmentPacketLimit())
+}
+func (s *Session) sealIKEAt(h ikev2.Header, ps []ikev2.Payload, enc, auth []byte, limit int) ([][]byte, error) {
+	rng := s.cfg.Random
+	if s.protection().AEAD() {
+		rng = &s.ikeIV
 	}
-	b, err := ikev2.Seal(h, ps, enc, auth, s.integ, s.cfg.Random)
+	if s.fragmentation {
+		return ikev2.SealFragmentsProtected(h, ps, enc, auth, s.protection(), rng, limit)
+	}
+	b, err := ikev2.SealProtected(h, ps, enc, auth, s.protection(), rng)
 	if err != nil {
 		return nil, err
 	}
@@ -130,13 +137,13 @@ func (s *Session) openIKE(b, enc, auth []byte, fb *fragmentBuffer) (ikev2.Messag
 		return ikev2.Message{}, false, err
 	}
 	if h.NextPayload != ikev2.SKF {
-		m, err := ikev2.Open(b, enc, auth, s.integ)
+		m, err := ikev2.OpenProtected(b, enc, auth, s.protection())
 		return m, err == nil, err
 	}
 	if !s.fragmentation {
 		return ikev2.Message{}, false, errors.New("IKE fragmentation not negotiated")
 	}
-	f, err := ikev2.OpenFragment(b, enc, auth, s.integ)
+	f, err := ikev2.OpenFragmentProtected(b, enc, auth, s.protection())
 	if err != nil {
 		return ikev2.Message{}, false, err
 	}
@@ -148,6 +155,48 @@ func fragmentationOffered(ps []ikev2.Payload) bool {
 		if p.Type == ikev2.Notify && bytes.Equal(p.Data, []byte{0, 0, byte(ikev2.FragmentationSupported >> 8), byte(ikev2.FragmentationSupported & 255)}) {
 			return true
 		}
+	}
+	return false
+}
+
+func (s *Session) fragmentPacketLimit() int {
+	if s.cfg.IKEFragmentMTU == 0 {
+		return ikeFragmentPacketLimit
+	}
+	return s.cfg.IKEFragmentMTU - 40 - 8 - 4
+}
+
+// A flight retains the producer's plaintext only for its bounded exchange.
+// Probes retain the Message ID, increase Total Fragments and reset backoff.
+// Ordinary retries retain the exact same encrypted bytes and IVs.
+type ikeFlight struct {
+	packets [][]byte
+	limit   int
+	probe   bool
+	reseal  func(int) ([][]byte, error)
+}
+
+func (s *Session) newIKEFlight(h ikev2.Header, ps []ikev2.Payload, enc, auth []byte) (*ikeFlight, error) {
+	f := &ikeFlight{limit: s.fragmentPacketLimit(), probe: s.cfg.IKEFragmentPMTU && s.fragmentation}
+	f.reseal = func(limit int) ([][]byte, error) { return s.sealIKEAt(h, ps, enc, auth, limit) }
+	var err error
+	f.packets, err = f.reseal(f.limit)
+	return f, err
+}
+func (f *ikeFlight) nextProbe() bool {
+	if f == nil || !f.probe {
+		return false
+	}
+	for _, limit := range []int{1024 - 52, 576 - 52} {
+		if limit >= f.limit {
+			continue
+		}
+		packets, err := f.reseal(limit)
+		if err != nil || len(packets) <= len(f.packets) {
+			continue
+		}
+		f.limit, f.packets = limit, packets
+		return true
 	}
 	return false
 }

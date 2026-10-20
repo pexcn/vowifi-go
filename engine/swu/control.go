@@ -109,7 +109,7 @@ func (s *Session) readLoop() {
 			if !s.fragmentation {
 				continue
 			}
-			f, err := ikev2.OpenFragment(b, enc, auth, s.integ)
+			f, err := ikev2.OpenFragmentProtected(b, enc, auth, s.protection())
 			if err != nil {
 				continue
 			}
@@ -126,7 +126,7 @@ func (s *Session) readLoop() {
 				continue
 			}
 		} else {
-			m, e = ikev2.Open(b, enc, auth, s.integ)
+			m, e = ikev2.OpenProtected(b, enc, auth, s.protection())
 			if e != nil {
 				continue
 			}
@@ -328,12 +328,12 @@ func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssoc
 	}
 	association.nextID++
 	enc, auth := association.outboundKeys()
-	b, err := s.sealIKE(association.header(exchange, id, false), ps, enc, auth)
+	flight, err := s.newIKEFlight(association.header(exchange, id, false), ps, enc, auth)
 	if err != nil {
 		return empty, err
 	}
 	for n := 0; n <= s.cfg.Retransmits; n++ {
-		if err = s.sendIKEPackets(ctx, b); err != nil {
+		if err = s.sendIKEPackets(ctx, flight.packets); err != nil {
 			return empty, err
 		}
 		timer := time.NewTimer(s.cfg.Timeout * time.Duration(uint64(1)<<n))
@@ -352,6 +352,9 @@ func (s *Session) exchangeOnIKELocked(ctx context.Context, association *ikeAssoc
 			}
 		}
 	retry:
+		if n == s.cfg.Retransmits && flight.nextProbe() {
+			n = -1
+		}
 	}
 	return empty, errors.New("IKE retransmissions exhausted")
 }

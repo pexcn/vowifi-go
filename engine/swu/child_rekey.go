@@ -118,11 +118,11 @@ func (s *Session) deriveChildPair(localSPI, peerSPI uint32, ni, nr, shared []byt
 	if !initiator {
 		outKey, inKey = inKey, outKey
 	}
-	out, err := ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: outKey[:s.encLen], IntegrityKey: outKey[s.encLen:], Integrity: s.integ, Random: s.cfg.Random})
+	out, err := ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: outKey[:s.encLen], IntegrityKey: outKey[s.encLen:], Integrity: s.integ, Encryption: s.protection().Encryption, Random: s.cfg.Random})
 	if err != nil {
 		return nil, err
 	}
-	in, err := ipsec.NewSA(ipsec.SAConfig{SPI: localSPI, EncryptionKey: inKey[:s.encLen], IntegrityKey: inKey[s.encLen:], Integrity: s.integ})
+	in, err := ipsec.NewSA(ipsec.SAConfig{SPI: localSPI, EncryptionKey: inKey[:s.encLen], IntegrityKey: inKey[s.encLen:], Integrity: s.integ, Encryption: s.protection().Encryption})
 	if err != nil {
 		return nil, err
 	}

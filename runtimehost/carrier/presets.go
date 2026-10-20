@@ -48,6 +48,8 @@ type PresetParameters struct {
 	NATKeepaliveSeconds   int              `json:"nat_keepalive_seconds" yaml:"nat_keepalive_seconds"`
 	DPDIntervalSeconds    int              `json:"dpd_interval_seconds" yaml:"dpd_interval_seconds"`
 	ReauthIntervalSeconds int              `json:"reauth_interval_seconds" yaml:"reauth_interval_seconds"`
+	IKEFragmentMTU        int              `json:"ike_fragment_mtu" yaml:"ike_fragment_mtu"`
+	IKEFragmentPMTU       bool             `json:"ike_fragment_pmtu" yaml:"ike_fragment_pmtu"`
 	IKEProposals          []string         `json:"ike_proposals" yaml:"ike_proposals"`
 	ESPProposals          []string         `json:"esp_proposals" yaml:"esp_proposals"`
 	IMSRegisterTemplate   RegisterTemplate `json:"ims_register_template" yaml:"ims_register_template"`

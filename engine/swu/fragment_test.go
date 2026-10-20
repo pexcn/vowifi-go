@@ -13,74 +13,85 @@ import (
 )
 
 func TestFragmentDeidentifiedWireReplay(t *testing.T) {
-	var fixture struct {
-		Provenance    string
-		EncryptionKey string `json:"encryption_key"`
-		IntegrityKey  string `json:"integrity_key"`
-		First         byte   `json:"first_payload"`
-		Plaintext     string
-		Packets       []string
-		Events        []struct {
-			Packet int
-			Tamper bool
-			Result string
-		}
-	}
-	raw, err := os.ReadFile("testdata/ike_fragment_replay.json")
-	if err != nil {
-		t.Fatal(err)
-	}
-	if err = json.Unmarshal(raw, &fixture); err != nil {
-		t.Fatal(err)
-	}
-	decode := func(s string) []byte {
-		b, err := hex.DecodeString(s)
-		if err != nil {
-			t.Fatal(err)
-		}
-		return b
-	}
-	enc, auth := decode(fixture.EncryptionKey), decode(fixture.IntegrityKey)
-	s := &Session{fragmentation: true, integ: vc.HMACSHA256128}
-	var fb fragmentBuffer
-	for i, event := range fixture.Events {
-		b := decode(fixture.Packets[event.Packet])
-		if event.Tamper {
-			b[len(b)-1] ^= 1
-		}
-		m, ready, err := s.openIKE(b, enc, auth, &fb)
-		result := "pending"
-		if err != nil {
-			result = "reject"
-		} else if ready {
-			result = "complete"
-		}
-		if result != event.Result {
-			t.Fatalf("event %d: %s, want %s (%v)", i, result, event.Result, err)
-		}
-		if ready {
-			first, plain, err := ikev2.EncodePayloads(m.Payloads)
-			if err != nil || first != fixture.First || !bytes.Equal(plain, decode(fixture.Plaintext)) {
-				t.Fatal("replay changed plaintext", err)
+	for _, tc := range []struct {
+		file       string
+		encryption vc.Encryption
+	}{{"ike_fragment_replay.json", vc.AESCBC}, {"ike_gcm_fragment_replay.json", vc.AESGCM16}} {
+		t.Run(tc.file, func(t *testing.T) {
+			var fixture struct {
+				Provenance    string
+				EncryptionKey string `json:"encryption_key"`
+				IntegrityKey  string `json:"integrity_key"`
+				First         byte   `json:"first_payload"`
+				Plaintext     string
+				Packets       []string
+				Events        []struct {
+					Packet int
+					Tamper bool
+					Result string
+				}
 			}
-			if m.Header.MessageID != 1 || m.Header.Exchange != ikev2.IKEAuth || m.Header.Flags != ikev2.FlagResponse {
-				t.Fatal("replay changed envelope")
+			raw, err := os.ReadFile("testdata/" + tc.file)
+			if err != nil {
+				t.Fatal(err)
 			}
-		}
-	}
-	if len(fb.sets) != 0 {
-		t.Fatal("complete replay retained fragments")
-	}
-	// Completion is not a tombstone: a dropped delivery can be retried in full.
-	for i, packet := range fixture.Packets {
-		_, ready, err := s.openIKE(decode(packet), enc, auth, &fb)
-		if err != nil || ready != (i == len(fixture.Packets)-1) {
-			t.Fatal("retransmission could not reassemble", err)
-		}
-	}
-	s.fragmentation = false
-	if _, _, err := s.openIKE(decode(fixture.Packets[0]), enc, auth, &fb); err == nil {
-		t.Fatal("unnegotiated SKF accepted")
+			if err = json.Unmarshal(raw, &fixture); err != nil {
+				t.Fatal(err)
+			}
+			decode := func(s string) []byte {
+				b, err := hex.DecodeString(s)
+				if err != nil {
+					t.Fatal(err)
+				}
+				return b
+			}
+			enc, auth := decode(fixture.EncryptionKey), decode(fixture.IntegrityKey)
+			integ := vc.HMACSHA256128
+			if tc.encryption == vc.AESGCM16 {
+				integ = 0
+			}
+			s := &Session{fragmentation: true, encryption: tc.encryption, integ: integ}
+			var fb fragmentBuffer
+			for i, event := range fixture.Events {
+				b := decode(fixture.Packets[event.Packet])
+				if event.Tamper {
+					b[len(b)-1] ^= 1
+				}
+				m, ready, err := s.openIKE(b, enc, auth, &fb)
+				result := "pending"
+				if err != nil {
+					result = "reject"
+				} else if ready {
+					result = "complete"
+				}
+				if result != event.Result {
+					t.Fatalf("event %d: %s, want %s (%v)", i, result, event.Result, err)
+				}
+				if ready {
+					first, plain, err := ikev2.EncodePayloads(m.Payloads)
+					if err != nil || first != fixture.First || !bytes.Equal(plain, decode(fixture.Plaintext)) {
+						t.Fatal("replay changed plaintext", err)
+					}
+					if m.Header.MessageID != 1 || m.Header.Exchange != ikev2.IKEAuth || m.Header.Flags != ikev2.FlagResponse {
+						t.Fatal("replay changed envelope")
+					}
+				}
+			}
+			if len(fb.sets) != 0 {
+				t.Fatal("complete replay retained fragments")
+			}
+			// Completion is not a tombstone: a dropped delivery can be retried in full.
+			for i, packet := range fixture.Packets {
+				_, ready, err := s.openIKE(decode(packet), enc, auth, &fb)
+				if err != nil || ready != (i == len(fixture.Packets)-1) {
+					t.Fatal("retransmission could not reassemble", err)
+				}
+			}
+			s.fragmentation = false
+			if _, _, err := s.openIKE(decode(fixture.Packets[0]), enc, auth, &fb); err == nil {
+				t.Fatal("unnegotiated SKF accepted")
+			}
+		})
 	}
 }
 

@@ -42,6 +42,7 @@ func TestUnsupportedCarrierDoesNotSilentlyOfferDifferentAlgorithms(t *testing.T)
 	c := carrier.ResolveEffectiveCarrierConfig(carrier.EffectiveCarrierConfigInput{MCC: "530", MNC: "24"})
 	req := testRequest()
 	req.Prepared.EffectiveCarrier = c
+	req.Prepared.EffectiveCarrier.Parameters.IKEProposals = []string{"aes128gcm8-prfsha256-modp2048"}
 	if _, err := buildSWUConfig(req); err == nil || !strings.Contains(err.Error(), "no supported IKE/ESP pair") {
 		t.Fatalf("unsupported profile silently changed: %v", err)
 	}
@@ -56,7 +57,7 @@ func TestCarrierProfileExplicitPRFAndStrictPairing(t *testing.T) {
 		{"aes128-sha1-prfsha256-modp2048", "aes128-sha1", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA256, Integrity: vc.HMACSHA196, DHGroup: 14}},
 		{" AES128-SHA1-PRFSHA1-MODP1024 ", " AES128-SHA1 ", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA1, Integrity: vc.HMACSHA196, DHGroup: 2}},
 		{"aes128-sha256-prfsha256-modp2048", "aes128-sha256", swu.IKEProfile{EncryptionKeyBits: 128, PRF: vc.PRFSHA256, Integrity: vc.HMACSHA256128, DHGroup: 14}},
-		{"aes256-sha256-prfsha512-modp2048", "aes256-sha256", swu.IKEProfile{}},
+		{"aes256-sha256-prfsha512-modp2048", "aes256-sha256", swu.IKEProfile{EncryptionKeyBits: 256, PRF: vc.PRFSHA512, Integrity: vc.HMACSHA256128, DHGroup: 14}},
 		{"aes256-sha256-prfunknown-modp2048", "aes256-sha256", swu.IKEProfile{}},
 		{"aes256-sha256-prfsha1-modp3072", "aes256-sha256", swu.IKEProfile{}},
 		{"aes256-sha256-prfsha1-modp2048-extra", "aes256-sha256", swu.IKEProfile{}},
@@ -137,6 +138,7 @@ func TestO2CarrierProfileEmitsIndependentPRFInIKEInit(t *testing.T) {
 func TestUnsupportedCarrierStartupReportsConfigurationFailure(t *testing.T) {
 	req := testRequest()
 	req.Prepared.EffectiveCarrier = carrier.ResolveEffectiveCarrierConfig(carrier.EffectiveCarrierConfigInput{MCC: "530", MNC: "24"})
+	req.Prepared.EffectiveCarrier.Parameters.IKEProposals = []string{"aes128gcm8-prfsha256-modp2048"}
 	inst, err := Start(context.Background(), req)
 	if !errors.Is(err, errUnsupportedCarrierProposals) || inst == nil {
 		t.Fatalf("unsupported carrier started: %v", err)
@@ -172,6 +174,24 @@ func TestIMSProfileSelectsInitialDigestVariant(t *testing.T) {
 		}
 		if cfg.UsePlainDigestPlaceholder != tc.plain {
 			t.Fatalf("%s/%s initial Digest variant ignored", tc.mcc, tc.mnc)
+		}
+	}
+}
+
+func TestCarrierGCMAndECPAreWiredWithoutIntegrityDowngrade(t *testing.T) {
+	req := testRequest()
+	req.Prepared.EffectiveCarrier.Parameters.IKEProposals = []string{"aes128gcm16-prfsha256-ecp256"}
+	req.Prepared.EffectiveCarrier.Parameters.ESPProposals = []string{"aes128gcm16"}
+	req.Prepared.EffectiveCarrier.Parameters.IKEFragmentMTU = 1024
+	req.Prepared.EffectiveCarrier.Parameters.IKEFragmentPMTU = true
+	cfg, err := buildSWUConfig(req)
+	if err != nil || cfg.Encryption != vc.AESGCM16 || cfg.Integrity != 0 || cfg.DHGroup != 19 || cfg.IKEFragmentMTU != 1024 || !cfg.IKEFragmentPMTU {
+		t.Fatalf("GCM host wiring: %+v %v", cfg, err)
+	}
+	for _, bad := range []string{"aes128gcm8-prfsha256-ecp256", "aes128gcm16-sha256-ecp256", "aes128gcm16-sha256-prfsha256-ecp256"} {
+		req.Prepared.EffectiveCarrier.Parameters.IKEProposals = []string{bad}
+		if _, err := buildSWUConfig(req); err == nil {
+			t.Fatalf("invalid GCM offer %s accepted", bad)
 		}
 	}
 }

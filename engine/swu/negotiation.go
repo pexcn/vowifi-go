@@ -13,14 +13,21 @@ type IKEProfile struct {
 	PRF               vc.PRF
 	Integrity         vc.Integrity
 	DHGroup           uint16
+	Encryption        vc.Encryption
 }
 
 func (p IKEProfile) proposal(number byte) ikev2.Proposal {
-	return ikev2.Proposal{Number: number, Protocol: 1, Transforms: []ikev2.Transform{{Type: 1, ID: 12, KeyBits: p.EncryptionKeyBits}, {Type: 2, ID: uint16(p.PRF)}, {Type: 3, ID: uint16(p.Integrity)}, {Type: 4, ID: p.DHGroup}}}
+	suite := p.protection()
+	ts := []ikev2.Transform{{Type: 1, ID: uint16(suite.Encryption), KeyBits: p.EncryptionKeyBits}, {Type: 2, ID: uint16(p.PRF)}}
+	if !suite.AEAD() {
+		ts = append(ts, ikev2.Transform{Type: 3, ID: uint16(p.Integrity)})
+	}
+	ts = append(ts, ikev2.Transform{Type: 4, ID: p.DHGroup})
+	return ikev2.Proposal{Number: number, Protocol: 1, Transforms: ts}
 }
 
 func configuredIKEProfiles(c Config) ([]IKEProfile, error) {
-	profiles := []IKEProfile{{c.EncryptionKeyBits, c.PRF, c.Integrity, c.DHGroup}}
+	profiles := []IKEProfile{{EncryptionKeyBits: c.EncryptionKeyBits, PRF: c.PRF, Integrity: c.Integrity, DHGroup: c.DHGroup, Encryption: c.Encryption}}
 	for _, p := range c.IKEAlternatives {
 		duplicate := false
 		for _, existing := range profiles {
@@ -34,7 +41,7 @@ func configuredIKEProfiles(c Config) ([]IKEProfile, error) {
 		return nil, errors.New("too many IKE profiles")
 	}
 	for _, p := range profiles {
-		if p.EncryptionKeyBits != 128 && p.EncryptionKeyBits != 256 || p.PRF.Size() == 0 || p.Integrity.KeyLen() == 0 || p.DHGroup != 14 && p.DHGroup != 2 {
+		if p.EncryptionKeyBits != 128 && p.EncryptionKeyBits != 256 || p.PRF.Size() == 0 || !p.protection().Valid() || p.DHGroup != 14 && p.DHGroup != 2 && (p.DHGroup < 19 || p.DHGroup > 21) {
 			return nil, errors.New("unsupported IKE profile")
 		}
 	}
@@ -57,7 +64,7 @@ func (s *Session) selectIKEProfile(body []byte) error {
 		if p.DHGroup != s.keyExchangeGroup {
 			return errors.New("selected IKE group differs from the KE payload")
 		}
-		s.prf, s.integ, s.encLen = p.PRF, p.Integrity, int(p.EncryptionKeyBits)/8
+		s.prf, s.integ, s.encryption, s.encLen = p.PRF, p.Integrity, p.protection().Encryption, p.protection().KeyLen(p.EncryptionKeyBits)
 		s.cfg.EncryptionKeyBits, s.cfg.DHGroup = p.EncryptionKeyBits, p.DHGroup
 		return nil
 	}
@@ -76,4 +83,19 @@ func (s *Session) retryKEGroup(group uint16) error {
 		}
 	}
 	return fmt.Errorf("server requested unoffered DH group %d", group)
+}
+
+func (p IKEProfile) protection() vc.Protection {
+	e := p.Encryption
+	if e == 0 {
+		e = vc.AESCBC
+	}
+	return vc.Protection{Encryption: e, Integrity: p.Integrity}
+}
+func (s *Session) protection() vc.Protection {
+	e := s.encryption
+	if e == 0 {
+		e = vc.AESCBC
+	}
+	return vc.Protection{Encryption: e, Integrity: s.integ}
 }

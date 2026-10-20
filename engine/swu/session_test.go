@@ -71,6 +71,7 @@ type mockPeer struct {
 	err                              chan error
 	mode                             string
 	authFragments, responseFragments int
+	gcmIV                            *vc.IVSequence
 }
 
 func newMockPeer(t *testing.T, mode string) *mockPeer {
@@ -106,7 +107,7 @@ func newMockPeer(t *testing.T, mode string) *mockPeer {
 	}
 	mapped := &mappedUDP{DatagramConn: conn, natt: natt.LocalAddr().String()}
 	t.Cleanup(func() { mapped.Close() })
-	p := &mockPeer{t: t, initial: initial, natt: natt, transport: mapped, cert: der, signer: signer, spir: 0x1111222233334444, err: make(chan error, 1), mode: mode}
+	p := &mockPeer{t: t, initial: initial, natt: natt, transport: mapped, cert: der, signer: signer, spir: 0x1111222233334444, err: make(chan error, 1), mode: mode, gcmIV: &vc.IVSequence{}}
 	p.cfg = Config{EPDGAddr: initial.LocalAddr().String(), ServerName: "epdg.test", NAI: "0001010000000001@example", SIM: &testSIM{}, Transport: mapped, Roots: pool, Timeout: 150 * time.Millisecond, Retransmits: 1, DPDInterval: time.Hour, ChildLifetime: time.Hour}
 	return p
 }
@@ -137,7 +138,7 @@ func (p *mockPeer) send(c *net.UDPConn, b []byte, marked bool) error {
 func (p *mockPeer) response(h ikev2.Header, ps []ikev2.Payload) error {
 	h.Flags = ikev2.FlagResponse
 	if p.mode == "fragment" {
-		packets, err := ikev2.SealFragments(h, ps, p.keys.SKer, p.keys.SKar, vc.HMACSHA256128, nil, 384)
+		packets, err := ikev2.SealFragmentsProtected(h, ps, p.keys.SKer, p.keys.SKar, p.protection(), p.ivSource(), 384)
 		if err != nil {
 			return err
 		}
@@ -161,7 +162,7 @@ func (p *mockPeer) response(h ikev2.Header, ps []ikev2.Payload) error {
 		}
 		return p.send(p.natt, packets[0], true)
 	}
-	b, e := ikev2.Seal(h, ps, p.keys.SKer, p.keys.SKar, vc.HMACSHA256128, nil)
+	b, e := ikev2.SealProtected(h, ps, p.keys.SKer, p.keys.SKar, p.protection(), p.ivSource())
 	if e != nil {
 		return e
 	}
@@ -177,7 +178,7 @@ func (p *mockPeer) readAuth(id uint32) (ikev2.Message, error) {
 		}
 		if b[16] == ikev2.SKF {
 			p.authFragments++
-			f, e := ikev2.OpenFragment(b, p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
+			f, e := ikev2.OpenFragmentProtected(b, p.keys.SKei, p.keys.SKai, p.protection())
 			if e != nil {
 				return m, e
 			}
@@ -190,7 +191,7 @@ func (p *mockPeer) readAuth(id uint32) (ikev2.Message, error) {
 				continue
 			}
 		} else {
-			m, e = ikev2.Open(b, p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
+			m, e = ikev2.OpenProtected(b, p.keys.SKei, p.keys.SKai, p.protection())
 			if e != nil {
 				return m, e
 			}
@@ -287,7 +288,7 @@ func (p *mockPeer) handshake() error {
 	if e != nil {
 		return e
 	}
-	p.keys, e = vc.DeriveIKE(vc.PRFSHA256, vc.HMACSHA256128, 16, p.ni, p.nr, secret, p.spii, p.spir)
+	p.keys, e = vc.DeriveIKE(vc.PRFSHA256, p.protection().Integrity, p.protection().KeyLen(128), p.ni, p.nr, secret, p.spii, p.spir)
 	if e != nil {
 		return e
 	}
@@ -571,15 +572,19 @@ func (p *mockPeer) handshake() error {
 	if p.mode == "auth-lifetime" {
 		ps = append(ps, ikev2.Notification(16403, []byte{0, 0, 0, 30}))
 	}
-	material, e := vc.PRFSHA256.Plus(p.keys.SKd, append(append([]byte{}, p.ni...), p.nr...), 96)
+	suite := p.protection()
+	enclen := suite.KeyLen(128)
+	authlen := suite.Integrity.KeyLen()
+	n := enclen + authlen
+	material, e := vc.PRFSHA256.Plus(p.keys.SKd, append(append([]byte{}, p.ni...), p.nr...), 2*n)
 	if e != nil {
 		return e
 	}
-	p.fromClient, e = ipsec.NewSA(ipsec.SAConfig{SPI: 0xdeadbeef, EncryptionKey: material[:16], IntegrityKey: material[16:48], Integrity: vc.HMACSHA256128})
+	p.fromClient, e = ipsec.NewSA(ipsec.SAConfig{SPI: 0xdeadbeef, EncryptionKey: material[:enclen], IntegrityKey: material[enclen:n], Encryption: suite.Encryption, Integrity: suite.Integrity})
 	if e != nil {
 		return e
 	}
-	p.toClient, e = ipsec.NewSA(ipsec.SAConfig{SPI: p.childSPI, EncryptionKey: material[48:64], IntegrityKey: material[64:96], Integrity: vc.HMACSHA256128})
+	p.toClient, e = ipsec.NewSA(ipsec.SAConfig{SPI: p.childSPI, EncryptionKey: material[n : n+enclen], IntegrityKey: material[n+enclen:], Encryption: suite.Encryption, Integrity: suite.Integrity})
 	if e != nil {
 		return e
 	}
@@ -1199,4 +1204,17 @@ func TestCheckcodeModeCompleteSWuHandshake(t *testing.T) {
 			})
 		}
 	}
+}
+
+func (p *mockPeer) protection() vc.Protection {
+	if p.cfg.Encryption == vc.AESGCM16 {
+		return vc.Protection{Encryption: vc.AESGCM16}
+	}
+	return vc.Protection{Encryption: vc.AESCBC, Integrity: vc.HMACSHA256128}
+}
+func (p *mockPeer) ivSource() io.Reader {
+	if p.protection().AEAD() {
+		return p.gcmIV
+	}
+	return rand.Reader
 }

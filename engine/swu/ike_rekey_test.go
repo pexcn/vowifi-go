@@ -36,7 +36,7 @@ func readIKEFromClient(t *testing.T, p *mockPeer, peer rekeyPeerIKE) (ikev2.Mess
 		if len(b) < 4 || binary.BigEndian.Uint32(b) != 0 {
 			t.Fatalf("expected IKE: %x", b)
 		}
-		m, err := ikev2.Open(b[4:], enc, auth, vc.HMACSHA256128)
+		m, err := ikev2.OpenProtected(b[4:], enc, auth, p.protection())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -65,7 +65,7 @@ func sendIKEFromPeer(t *testing.T, p *mockPeer, peer rekeyPeerIKE, id uint32, ex
 		flags |= ikev2.FlagResponse
 	}
 	h := ikev2.Header{InitiatorSPI: peer.spii, ResponderSPI: peer.spir, Exchange: exchange, Flags: flags, MessageID: id}
-	b, err := ikev2.Seal(h, ps, enc, auth, vc.HMACSHA256128, nil)
+	b, err := ikev2.SealProtected(h, ps, enc, auth, p.protection(), p.ivSource())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -112,7 +112,7 @@ func completeLocalIKERekey(t *testing.T, p *mockPeer, s *Session, old rekeyPeerI
 		t.Fatal(err)
 	}
 	ni, nr := requirePayload(t, request, ikev2.Nonce), bytes.Repeat([]byte{0x72}, 32)
-	keys, err := vc.DeriveIKERekey(vc.PRFSHA256, vc.HMACSHA256128, 16, old.keys.SKd, ni, nr, shared, spii, spir)
+	keys, err := vc.DeriveIKERekey(vc.PRFSHA256, p.protection().Integrity, p.protection().KeyLen(128), old.keys.SKd, ni, nr, shared, spii, spir)
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -164,7 +164,7 @@ func completePeerIKERekey(t *testing.T, p *mockPeer, s *Session, old rekeyPeerIK
 	if err != nil {
 		t.Fatal(err)
 	}
-	keys, err := vc.DeriveIKERekey(vc.PRFSHA256, vc.HMACSHA256128, 16, old.keys.SKd, ni, nr, shared, spii, spir)
+	keys, err := vc.DeriveIKERekey(vc.PRFSHA256, p.protection().Integrity, p.protection().KeyLen(128), old.keys.SKd, ni, nr, shared, spii, spir)
 	if err != nil {
 		t.Fatal(err)
 	}

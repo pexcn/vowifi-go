@@ -44,7 +44,7 @@ func readRekeyControl(t *testing.T, p *mockPeer) (ikev2.Message, []byte) {
 		if len(b) < 4 || binary.BigEndian.Uint32(b) != 0 {
 			t.Fatalf("expected IKE, got %x", b)
 		}
-		m, err := ikev2.Open(b[4:], p.keys.SKei, p.keys.SKai, vc.HMACSHA256128)
+		m, err := ikev2.OpenProtected(b[4:], p.keys.SKei, p.keys.SKai, p.protection())
 		if err != nil {
 			t.Fatal(err)
 		}
@@ -55,7 +55,7 @@ func readRekeyControl(t *testing.T, p *mockPeer) (ikev2.Message, []byte) {
 func sendRekeyRequest(t *testing.T, p *mockPeer, id uint32, exchange byte, ps []ikev2.Payload) []byte {
 	t.Helper()
 	h := ikev2.Header{InitiatorSPI: p.spii, ResponderSPI: p.spir, Exchange: exchange, MessageID: id}
-	b, err := ikev2.Seal(h, ps, p.keys.SKer, p.keys.SKar, vc.HMACSHA256128, nil)
+	b, err := ikev2.SealProtected(h, ps, p.keys.SKer, p.keys.SKar, p.protection(), p.ivSource())
 	if err != nil {
 		t.Fatal(err)
 	}
@@ -79,19 +79,21 @@ func requirePayload(t *testing.T, m ikev2.Message, typ byte) []byte {
 func peerRekeySAs(t *testing.T, p *mockPeer, localSPI, peerSPI uint32, ni, nr, shared []byte, peerInitiator bool) (*ipsec.SA, *ipsec.SA) {
 	t.Helper()
 	seed := append(append(append([]byte{}, shared...), ni...), nr...)
-	key, err := vc.PRFSHA256.Plus(p.keys.SKd, seed, 96)
+	key, err := vc.PRFSHA256.Plus(p.keys.SKd, seed, 2*(p.protection().KeyLen(128)+p.protection().Integrity.KeyLen()))
 	if err != nil {
 		t.Fatal(err)
 	}
-	to, from := key[48:], key[:48]
+	enclen := p.protection().KeyLen(128)
+	n := enclen + p.protection().Integrity.KeyLen()
+	to, from := key[n:], key[:n]
 	if peerInitiator {
 		to, from = from, to
 	}
-	out, err := ipsec.NewSA(ipsec.SAConfig{SPI: localSPI, EncryptionKey: to[:16], IntegrityKey: to[16:], Integrity: vc.HMACSHA256128})
+	out, err := ipsec.NewSA(ipsec.SAConfig{SPI: localSPI, EncryptionKey: to[:enclen], IntegrityKey: to[enclen:], Integrity: p.protection().Integrity, Encryption: p.protection().Encryption})
 	if err != nil {
 		t.Fatal(err)
 	}
-	in, err := ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: from[:16], IntegrityKey: from[16:], Integrity: vc.HMACSHA256128})
+	in, err := ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: from[:enclen], IntegrityKey: from[enclen:], Integrity: p.protection().Integrity, Encryption: p.protection().Encryption})
 	if err != nil {
 		t.Fatal(err)
 	}

@@ -28,7 +28,10 @@ type Fragment struct {
 // bounds IKE bytes only; the caller reserves outer IP/UDP/Non-ESP headers.
 // Call this only after both peers have advertised fragmentation support.
 func SealFragments(h Header, ps []Payload, enc, integ []byte, alg vc.Integrity, rng io.Reader, maxPacket int) ([][]byte, error) {
-	if maxPacket < 84 || maxPacket > 65535 {
+	return SealFragmentsProtected(h, ps, enc, integ, vc.Protection{Encryption: vc.AESCBC, Integrity: alg}, rng, maxPacket)
+}
+func SealFragmentsProtected(h Header, ps []Payload, enc, integ []byte, suite vc.Protection, rng io.Reader, maxPacket int) ([][]byte, error) {
+	if maxPacket < 84 || !suite.Valid() || maxPacket < 36+suite.IVSize()+suite.Alignment()+suite.TagSize() || maxPacket > 65535 {
 		return nil, errors.New("invalid IKE fragment packet limit")
 	}
 	if h.Exchange == SAInit {
@@ -41,12 +44,13 @@ func SealFragments(h Header, ps []Payload, enc, integ []byte, alg vc.Integrity, 
 	if len(plain) > MaxFragmentedSize {
 		return nil, errors.New("fragmented IKE message too large")
 	}
-	if alg.Size() == 0 {
+	if !suite.Valid() {
 		return nil, errors.New("unsupported IKE integrity")
 	}
-	padded := (len(plain)/16 + 1) * 16
-	if 32+16+padded+alg.Size() <= maxPacket {
-		b, err := sealEncrypted(h, first, plain, nil, enc, integ, alg, rng)
+	block := suite.Alignment()
+	padded := (len(plain)/block + 1) * block
+	if 32+suite.IVSize()+padded+suite.TagSize() <= maxPacket {
+		b, err := sealProtected(h, first, plain, nil, enc, integ, suite, rng)
 		if err != nil {
 			return nil, err
 		}
@@ -54,7 +58,7 @@ func SealFragments(h Header, ps []Payload, enc, integ []byte, alg vc.Integrity, 
 	}
 	// Each fragment has 28 IKE + 8 SKF headers, 16 IV, an integral number
 	// of CBC blocks (including at least one padding byte), and the ICV.
-	capacity := ((maxPacket-36-16-alg.Size())/16)*16 - 1
+	capacity := ((maxPacket-36-suite.IVSize()-suite.TagSize())/block)*block - 1
 	if capacity <= 0 {
 		return nil, errors.New("invalid IKE fragment packet limit")
 	}
@@ -71,7 +75,7 @@ func SealFragments(h Header, ps []Payload, enc, integ []byte, alg vc.Integrity, 
 		fh := binary.BigEndian.AppendUint16(nil, uint16(i+1))
 		fh = binary.BigEndian.AppendUint16(fh, uint16(total))
 		end := min((i+1)*capacity, len(plain))
-		wire, err := sealEncrypted(h, next, plain[i*capacity:end], fh, enc, integ, alg, rng)
+		wire, err := sealProtected(h, next, plain[i*capacity:end], fh, enc, integ, suite, rng)
 		if err != nil {
 			return nil, err
 		}
@@ -81,7 +85,10 @@ func SealFragments(h Header, ps []Payload, enc, integ []byte, alg vc.Integrity, 
 }
 
 func OpenFragment(b, enc, integ []byte, alg vc.Integrity) (Fragment, error) {
-	h, plain, err := openEncrypted(b, enc, integ, alg, SKF, 36)
+	return OpenFragmentProtected(b, enc, integ, vc.Protection{Encryption: vc.AESCBC, Integrity: alg})
+}
+func OpenFragmentProtected(b, enc, integ []byte, suite vc.Protection) (Fragment, error) {
+	h, plain, err := openProtected(b, enc, integ, suite, SKF, 36)
 	if err != nil {
 		return Fragment{}, err
 	}

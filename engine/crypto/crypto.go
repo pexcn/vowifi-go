@@ -4,10 +4,12 @@ package crypto
 import (
 	"crypto/aes"
 	"crypto/cipher"
+	"crypto/ecdh"
 	"crypto/hmac"
 	"crypto/rand"
 	"crypto/sha1"
 	"crypto/sha256"
+	"crypto/sha512"
 	"encoding/binary"
 	"errors"
 	"hash"
@@ -20,6 +22,8 @@ type PRF uint16
 const (
 	PRFSHA1   PRF = 2
 	PRFSHA256 PRF = 5
+	PRFSHA384 PRF = 6
+	PRFSHA512 PRF = 7
 )
 
 func (p PRF) factory() (func() hash.Hash, error) {
@@ -28,6 +32,10 @@ func (p PRF) factory() (func() hash.Hash, error) {
 		return sha1.New, nil
 	case PRFSHA256:
 		return sha256.New, nil
+	case PRFSHA384:
+		return sha512.New384, nil
+	case PRFSHA512:
+		return sha512.New, nil
 	}
 	return nil, errors.New("unsupported PRF")
 }
@@ -41,6 +49,12 @@ func (p PRF) Sum(key, data []byte) ([]byte, error) {
 	return h.Sum(nil), nil
 }
 func (p PRF) Size() int {
+	if p == PRFSHA384 {
+		return 48
+	}
+	if p == PRFSHA512 {
+		return 64
+	}
 	if p == PRFSHA1 {
 		return 20
 	}
@@ -74,9 +88,17 @@ type Integrity uint16
 const (
 	HMACSHA196    Integrity = 2
 	HMACSHA256128 Integrity = 12
+	HMACSHA384192 Integrity = 13
+	HMACSHA512256 Integrity = 14
 )
 
 func (a Integrity) KeyLen() int {
+	if a == HMACSHA384192 {
+		return 48
+	}
+	if a == HMACSHA512256 {
+		return 64
+	}
 	if a == HMACSHA196 {
 		return 20
 	}
@@ -86,6 +108,12 @@ func (a Integrity) KeyLen() int {
 	return 0
 }
 func (a Integrity) Size() int {
+	if a == HMACSHA384192 {
+		return 24
+	}
+	if a == HMACSHA512256 {
+		return 32
+	}
 	if a == HMACSHA196 {
 		return 12
 	}
@@ -101,6 +129,10 @@ func (a Integrity) MAC(key, data []byte) ([]byte, error) {
 		p = PRFSHA1
 	case HMACSHA256128:
 		p = PRFSHA256
+	case HMACSHA384192:
+		p = PRFSHA384
+	case HMACSHA512256:
+		p = PRFSHA512
 	default:
 		return nil, errors.New("unsupported integrity algorithm")
 	}
@@ -160,6 +192,7 @@ const group2Hex = "FFFFFFFFFFFFFFFFC90FDAA22168C234C4C6628B80DC1CD129024E088A67C
 var group2, _ = new(big.Int).SetString(group2Hex, 16)
 
 type MODP struct {
+	ecp    *ecdh.PrivateKey
 	x      *big.Int
 	p      *big.Int
 	Public []byte
@@ -173,6 +206,25 @@ func NewDH14(rng io.Reader) (*DH14, error) {
 
 func NewMODP(group uint16, rng io.Reader) (*MODP, error) {
 	var p *big.Int
+	if group >= 19 && group <= 21 {
+		if rng == nil {
+			rng = rand.Reader
+		}
+		var curve ecdh.Curve
+		switch group {
+		case 19:
+			curve = ecdh.P256()
+		case 20:
+			curve = ecdh.P384()
+		case 21:
+			curve = ecdh.P521()
+		}
+		key, err := curve.GenerateKey(rng)
+		if err != nil {
+			return nil, err
+		}
+		return &MODP{ecp: key, Public: append([]byte{}, key.PublicKey().Bytes()[1:]...)}, nil
+	}
 	switch group {
 	case 14:
 		p = group14
@@ -194,6 +246,16 @@ func NewMODP(group uint16, rng io.Reader) (*MODP, error) {
 	return &MODP{x: x, p: p, Public: pub.FillBytes(make([]byte, p.BitLen()/8))}, nil
 }
 func (d *MODP) Shared(peer []byte) ([]byte, error) {
+	if d.ecp != nil {
+		if len(peer) != len(d.Public) {
+			return nil, errors.New("invalid ECP public length")
+		}
+		key, err := d.ecp.Curve().NewPublicKey(append([]byte{4}, peer...))
+		if err != nil {
+			return nil, err
+		}
+		return d.ecp.ECDH(key)
+	}
 	if len(peer) != len(d.Public) {
 		return nil, errors.New("invalid MODP public length")
 	}
@@ -210,7 +272,7 @@ type IKEKeys struct{ SKd, SKai, SKar, SKei, SKer, SKpi, SKpr []byte }
 
 func DeriveIKE(p PRF, integ Integrity, encLen int, ni, nr, shared []byte, spii, spir uint64) (IKEKeys, error) {
 	var z IKEKeys
-	if len(ni) < 16 || len(nr) < 16 || integ.KeyLen() == 0 || (encLen != 16 && encLen != 24 && encLen != 32) {
+	if len(ni) < 16 || len(nr) < 16 || !validIKEKeyLengths(integ, encLen) {
 		return z, errors.New("invalid IKE key derivation parameters")
 	}
 	nonce := append(append([]byte{}, ni...), nr...)
@@ -224,7 +286,7 @@ func DeriveIKE(p PRF, integ Integrity, encLen int, ni, nr, shared []byte, spii, 
 // DeriveIKERekey implements RFC 7296 2.18. The previous SK_d, rather than
 // Ni|Nr, keys the SKEYSEED PRF; rekey never repeats EAP or IKE_AUTH.
 func DeriveIKERekey(p PRF, integ Integrity, encLen int, oldSKd, ni, nr, shared []byte, spii, spir uint64) (IKEKeys, error) {
-	if len(oldSKd) != p.Size() || p.Size() == 0 || len(ni) < 16 || len(ni) > 256 || len(nr) < 16 || len(nr) > 256 || len(shared) == 0 || spii == 0 || spir == 0 || integ.KeyLen() == 0 || (encLen != 16 && encLen != 24 && encLen != 32) {
+	if len(oldSKd) != p.Size() || p.Size() == 0 || len(ni) < 16 || len(ni) > 256 || len(nr) < 16 || len(nr) > 256 || len(shared) == 0 || spii == 0 || spir == 0 || !validIKEKeyLengths(integ, encLen) {
 		return IKEKeys{}, errors.New("invalid IKE rekey derivation parameters")
 	}
 	seed := append(append(append([]byte{}, shared...), ni...), nr...)
@@ -250,4 +312,11 @@ func expandIKE(p PRF, integ Integrity, encLen int, ni, nr, skeyseed []byte, spii
 	take := func(n int) []byte { b := append([]byte{}, material[:n]...); material = material[n:]; return b }
 	z = IKEKeys{take(p.Size()), take(integ.KeyLen()), take(integ.KeyLen()), take(encLen), take(encLen), take(p.Size()), take(p.Size())}
 	return z, nil
+}
+
+func validIKEKeyLengths(integ Integrity, encLen int) bool {
+	if integ == 0 {
+		return encLen == 20 || encLen == 28 || encLen == 36
+	}
+	return integ.KeyLen() != 0 && (encLen == 16 || encLen == 24 || encLen == 32)
 }

@@ -24,7 +24,7 @@ const (
 var errUnsupportedCarrierProposals = errors.New("carrier has no supported IKE/ESP pair")
 
 // Select a supported pair from the caller's resolved carrier proposals. The
-// current engine shares the CBC key size/integrity profile across IKE/Child SA;
+// current engine shares the selected key size/integrity profile across IKE/Child SA;
 // it must not silently substitute an algorithm outside either offer.
 func buildSWUConfig(req StartRequest) (swu.Config, error) {
 	p := req.Prepared
@@ -76,11 +76,14 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 		}
 	}
 	if len(profiles) > 0 {
+		cfg.Encryption = profiles[0].Encryption
+		cfg.IKEFragmentMTU = params.IKEFragmentMTU
+		cfg.IKEFragmentPMTU = params.IKEFragmentPMTU
 		cfg.EncryptionKeyBits, cfg.PRF, cfg.Integrity, cfg.DHGroup = profiles[0].EncryptionKeyBits, profiles[0].PRF, profiles[0].Integrity, profiles[0].DHGroup
 		cfg.IKEAlternatives = profiles[1:]
 		return cfg, nil
 	}
-	return swu.Config{}, fmt.Errorf("%w (requires AES-CBC, SHA1/SHA256 integrity and PRF, DH14 or explicit DH2): IKE %v ESP %v", errUnsupportedCarrierProposals, ikes, esps)
+	return swu.Config{}, fmt.Errorf("%w (requires a supported authenticated IKE/ESP pair): IKE %v ESP %v", errUnsupportedCarrierProposals, ikes, esps)
 }
 
 func parseCarrierIKEProfile(raw string) (swu.IKEProfile, string, bool) {
@@ -90,42 +93,71 @@ func parseCarrierIKEProfile(raw string) (swu.IKEProfile, string, bool) {
 	}
 	var p swu.IKEProfile
 	switch parts[0] {
-	case "aes128":
+	case "aes128", "aes128gcm16":
 		p.EncryptionKeyBits = 128
-	case "aes256":
+	case "aes256", "aes256gcm16":
 		p.EncryptionKeyBits = 256
 	default:
-		return swu.IKEProfile{}, "", false
+		return p, "", false
 	}
-	switch parts[1] {
-	case "sha1":
-		p.Integrity, p.PRF = vc.HMACSHA196, vc.PRFSHA1
-	case "sha256":
-		p.Integrity, p.PRF = vc.HMACSHA256128, vc.PRFSHA256
-	default:
-		return swu.IKEProfile{}, "", false
-	}
-	// As in the original proposal parser, an explicit PRF is independent of
-	// integrity. Only the three-part form derives its PRF from integrity.
-	if len(parts) == 4 {
-		switch strings.TrimPrefix(parts[2], "prf") {
+	gcm := strings.HasSuffix(parts[0], "gcm16")
+	prf := func(v string) vc.PRF {
+		switch strings.TrimPrefix(v, "prf") {
 		case "sha1":
-			p.PRF = vc.PRFSHA1
+			return vc.PRFSHA1
 		case "sha256":
-			p.PRF = vc.PRFSHA256
-		default:
-			return swu.IKEProfile{}, "", false
+			return vc.PRFSHA256
+		case "sha384":
+			return vc.PRFSHA384
+		case "sha512":
+			return vc.PRFSHA512
 		}
+		return 0
+	}
+	esp := parts[0] + "-" + parts[1]
+	if gcm {
+		if len(parts) != 3 || !strings.HasPrefix(parts[1], "prf") {
+			return p, "", false
+		}
+		p.Encryption = vc.AESGCM16
+		p.PRF = prf(parts[1])
+		esp = parts[0]
+	} else {
+		switch parts[1] {
+		case "sha1":
+			p.Integrity = vc.HMACSHA196
+		case "sha256":
+			p.Integrity = vc.HMACSHA256128
+		case "sha384":
+			p.Integrity = vc.HMACSHA384192
+		case "sha512":
+			p.Integrity = vc.HMACSHA512256
+		default:
+			return p, "", false
+		}
+		p.PRF = prf(parts[1])
+		if len(parts) == 4 {
+			p.PRF = prf(parts[2])
+		}
+	}
+	if p.PRF.Size() == 0 {
+		return p, "", false
 	}
 	switch parts[len(parts)-1] {
 	case "modp2048":
 		p.DHGroup = 14
 	case "modp1024":
 		p.DHGroup = 2
+	case "ecp256":
+		p.DHGroup = 19
+	case "ecp384":
+		p.DHGroup = 20
+	case "ecp521":
+		p.DHGroup = 21
 	default:
-		return swu.IKEProfile{}, "", false
+		return p, "", false
 	}
-	return p, parts[0] + "-" + parts[1], true
+	return p, esp, true
 }
 
 func applyIMSProfile(cfg *ims.Config, params carrier.PresetParameters, security *ims.SecurityParameters) error {

@@ -47,12 +47,16 @@ type Config struct {
 	Transport                                         ipsec.DatagramConn
 	Timeout, DPDInterval, ChildLifetime, NATKeepalive time.Duration
 	Retransmits, MTU                                  int
-	EncryptionKeyBits                                 uint16
-	DHGroup                                           uint16
-	IKEAlternatives                                   []IKEProfile
-	PRF                                               vc.PRF
-	Integrity                                         vc.Integrity
-	Random                                            io.Reader
+	// IKEFragmentMTU is the outer IP datagram budget; zero uses 1280.
+	IKEFragmentMTU    int
+	IKEFragmentPMTU   bool
+	EncryptionKeyBits uint16
+	Encryption        vc.Encryption
+	DHGroup           uint16
+	IKEAlternatives   []IKEProfile
+	PRF               vc.PRF
+	Integrity         vc.Integrity
+	Random            io.Reader
 }
 type Configuration struct {
 	Addresses, DNS, PCSCF           []netip.Addr
@@ -88,6 +92,8 @@ type Session struct {
 	prf                                                vc.PRF
 	integ                                              vc.Integrity
 	encLen                                             int
+	encryption                                         vc.Encryption
+	ikeIV                                              vc.IVSequence
 	nextID                                             uint32
 	childSPI                                           uint32
 	ikeMu                                              sync.Mutex
@@ -162,6 +168,9 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	if c.MTU < 576 || c.MTU > 64000 {
 		return nil, errors.New("invalid inner MTU")
 	}
+	if c.IKEFragmentMTU != 0 && (c.IKEFragmentMTU < 576 || c.IKEFragmentMTU > 64000) {
+		return nil, errors.New("invalid IKE fragmentation MTU")
+	}
 	if c.EncryptionKeyBits == 0 {
 		c.EncryptionKeyBits = 128
 	}
@@ -174,10 +183,14 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	if c.PRF.Size() == 0 {
 		return nil, errors.New("unsupported IKE PRF")
 	}
-	if c.Integrity == 0 {
+	if c.Encryption == 0 {
+		c.Encryption = vc.AESCBC
+	}
+	if c.Integrity == 0 && c.Encryption == vc.AESCBC {
 		c.Integrity = vc.HMACSHA256128
 	}
-	if c.Integrity.KeyLen() == 0 {
+	suite := vc.Protection{Encryption: c.Encryption, Integrity: c.Integrity}
+	if !suite.Valid() {
 		return nil, errors.New("unsupported IKE integrity")
 	}
 	if c.Random == nil {
@@ -202,7 +215,7 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		c.ServerName = host
 	}
 	childCtx, cancel := context.WithCancel(ctx)
-	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan ikev2.Message, 8), childReset: make(chan struct{}, 1), ikeReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encLen: int(c.EncryptionKeyBits) / 8}
+	s := &Session{DeviceID: c.DeviceID, TraceID: c.TraceID, EPDGHost: host, RemoteAddr: remote, StartedAt: time.Now(), cfg: c, ctx: childCtx, cancel: cancel, done: make(chan struct{}), packets: make(chan []byte, 128), responses: make(chan ikev2.Message, 8), childReset: make(chan struct{}, 1), ikeReset: make(chan struct{}, 1), prf: c.PRF, integ: c.Integrity, encryption: c.Encryption, encLen: suite.KeyLen(c.EncryptionKeyBits)}
 	s.ikeProfiles, s.keyExchangeGroup = profiles, c.DHGroup
 	_, port, _ := net.SplitHostPort(remote)
 	s.encapsulated = port == "4500"
@@ -352,7 +365,7 @@ func (s *Session) ikeSend(ctx context.Context, b []byte) error {
 func (s *Session) header(exchange byte, id uint32) ikev2.Header {
 	return ikev2.Header{InitiatorSPI: s.spii, ResponderSPI: s.spir, Exchange: exchange, Flags: ikev2.FlagInitiator, MessageID: id}
 }
-func (s *Session) exchange(requests [][]byte, encrypted bool) (ikev2.Message, []byte, error) {
+func (s *Session) exchange(requests [][]byte, encrypted bool, flight *ikeFlight) (ikev2.Message, []byte, error) {
 	request := requests[0]
 	want, e := ikev2.ParseHeader(request)
 	if e != nil {
@@ -368,12 +381,14 @@ func (s *Session) exchange(requests [][]byte, encrypted bool) (ikev2.Message, []
 		stage = "IKE_AUTH"
 	}
 	received, framingRejected, headerRejected, payloadRejected := 0, 0, 0, 0
+	transmissions := 0
 	lastRejection := "none"
 	retransmits := s.cfg.Retransmits
 	if want.Exchange == ikev2.SAInit && len(s.initialPeers) > 1 && retransmits > 2 {
 		retransmits = 2
 	}
 	for attempt := 0; attempt <= retransmits; attempt++ {
+		transmissions++
 		if e = s.sendIKEPackets(s.ctx, requests); e != nil {
 			return ikev2.Message{}, nil, fmt.Errorf("%s send (message_id=%d, attempt=%d): %w", stage, want.MessageID, attempt+1, e)
 		}
@@ -431,12 +446,16 @@ func (s *Session) exchange(requests [][]byte, encrypted bool) (ikev2.Message, []
 			cancel()
 			return m, append([]byte{}, b...), nil
 		}
+		if attempt == retransmits && flight.nextProbe() {
+			requests = flight.packets
+			attempt = -1
+		}
 	}
 	transportDiagnostics := ""
 	if diagnostic, ok := s.conn.(interface{ ReadDiagnostics() string }); ok {
 		transportDiagnostics = "; " + diagnostic.ReadDiagnostics()
 	}
-	diagnostic := fmt.Errorf("IKE exchange retransmissions exhausted (stage=%s, endpoint=%s, resolved_ips=%v, message_id=%d, nat_t=%t, transmissions=%d, received=%d, framing_rejected=%d, header_rejected=%d, payload_rejected=%d, last_rejection=%q%s)", stage, s.RemoteAddr, s.EPDGIPs, want.MessageID, s.encapsulated, retransmits+1, received, framingRejected, headerRejected, payloadRejected, lastRejection, transportDiagnostics)
+	diagnostic := fmt.Errorf("IKE exchange retransmissions exhausted (stage=%s, endpoint=%s, resolved_ips=%v, message_id=%d, nat_t=%t, transmissions=%d, received=%d, framing_rejected=%d, header_rejected=%d, payload_rejected=%d, last_rejection=%q%s)", stage, s.RemoteAddr, s.EPDGIPs, want.MessageID, s.encapsulated, transmissions, received, framingRejected, headerRejected, payloadRejected, lastRejection, transportDiagnostics)
 	if want.Exchange == ikev2.SAInit && received == 0 {
 		return ikev2.Message{}, nil, fmt.Errorf("%w: %v", errNoInitialResponse, diagnostic)
 	}
@@ -454,7 +473,13 @@ func randomUint(r io.Reader) (uint64, error) {
 	}
 }
 func (s *Session) espProposal(spi uint32) ikev2.Proposal {
-	return ikev2.Proposal{Number: 1, Protocol: 3, SPI: binary.BigEndian.AppendUint32(nil, spi), Transforms: []ikev2.Transform{{Type: 1, ID: 12, KeyBits: s.cfg.EncryptionKeyBits}, {Type: 3, ID: uint16(s.integ)}, {Type: 5, ID: 0}}}
+	suite := s.protection()
+	ts := []ikev2.Transform{{Type: 1, ID: uint16(suite.Encryption), KeyBits: suite.KeyBits(s.encLen)}}
+	if !suite.AEAD() {
+		ts = append(ts, ikev2.Transform{Type: 3, ID: uint16(s.integ)})
+	}
+	ts = append(ts, ikev2.Transform{Type: 5, ID: 0})
+	return ikev2.Proposal{Number: 1, Protocol: 3, SPI: binary.BigEndian.AppendUint32(nil, spi), Transforms: ts}
 }
 func validateProposal(b []byte, want ikev2.Proposal) (ikev2.Proposal, error) {
 	ps, e := ikev2.ParseProposals(b)
@@ -539,7 +564,7 @@ func (s *Session) handshake() error {
 		if e != nil {
 			return e
 		}
-		response, s.initResponse, e = s.exchange([][]byte{s.initRequest}, false)
+		response, s.initResponse, e = s.exchange([][]byte{s.initRequest}, false, nil)
 		if e != nil {
 			if cookies == 0 {
 				if retried, result := s.retryInitialEndpoint(e); retried {
@@ -684,11 +709,11 @@ func (s *Session) authenticate() error {
 	eapDone := false
 	sentAuth := false
 	for id := uint32(1); id <= 32; id++ {
-		requests, e := s.sealIKE(s.header(ikev2.IKEAuth, id), ps, s.keys.SKei, s.keys.SKai)
+		flight, e := s.newIKEFlight(s.header(ikev2.IKEAuth, id), ps, s.keys.SKei, s.keys.SKai)
 		if e != nil {
 			return e
 		}
-		response, _, e := s.exchange(requests, true)
+		response, _, e := s.exchange(flight.packets, true, flight)
 		if e != nil {
 			return e
 		}
@@ -887,11 +912,11 @@ func (s *Session) establishChild(ps []ikev2.Payload) error {
 	}
 	take := func(n int) []byte { out := append([]byte{}, material[:n]...); material = material[n:]; return out }
 	outEnc, outAuth, inEnc, inAuth := take(s.encLen), take(s.integ.KeyLen()), take(s.encLen), take(s.integ.KeyLen())
-	s.out, e = ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: outEnc, IntegrityKey: outAuth, Integrity: s.integ, Random: s.cfg.Random})
+	s.out, e = ipsec.NewSA(ipsec.SAConfig{SPI: peerSPI, EncryptionKey: outEnc, IntegrityKey: outAuth, Integrity: s.integ, Encryption: s.protection().Encryption, Random: s.cfg.Random})
 	if e != nil {
 		return e
 	}
-	s.in, e = ipsec.NewSA(ipsec.SAConfig{SPI: s.childSPI, EncryptionKey: inEnc, IntegrityKey: inAuth, Integrity: s.integ})
+	s.in, e = ipsec.NewSA(ipsec.SAConfig{SPI: s.childSPI, EncryptionKey: inEnc, IntegrityKey: inAuth, Integrity: s.integ, Encryption: s.protection().Encryption})
 	if e != nil {
 		return e
 	}

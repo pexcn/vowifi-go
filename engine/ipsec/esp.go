@@ -1,4 +1,4 @@
-// Package ipsec implements ESP AES-CBC with authenticated replay protection.
+// Package ipsec implements authenticated ESP with bounded replay protection.
 package ipsec
 
 import (
@@ -21,6 +21,7 @@ type SAConfig struct {
 	SPI                         uint32
 	EncryptionKey, IntegrityKey []byte
 	Integrity                   vc.Integrity
+	Encryption                  vc.Encryption
 	Random                      io.Reader
 }
 type SA struct {
@@ -28,19 +29,24 @@ type SA struct {
 	spi          uint32
 	enc, auth    []byte
 	alg          vc.Integrity
+	suite        vc.Protection
 	rng          io.Reader
 	seq, highest uint32
 	bitmap       uint64
 }
 
 func NewSA(c SAConfig) (*SA, error) {
-	if c.SPI == 0 || (len(c.EncryptionKey) != 16 && len(c.EncryptionKey) != 24 && len(c.EncryptionKey) != 32) || len(c.IntegrityKey) != c.Integrity.KeyLen() || c.Integrity.KeyLen() == 0 {
+	if c.Encryption == 0 {
+		c.Encryption = vc.AESCBC
+	}
+	suite := vc.Protection{Encryption: c.Encryption, Integrity: c.Integrity}
+	if c.SPI == 0 || !suite.Valid() || suite.KeyLen(suite.KeyBits(len(c.EncryptionKey))) != len(c.EncryptionKey) || len(c.IntegrityKey) != c.Integrity.KeyLen() {
 		return nil, errors.New("invalid ESP SA")
 	}
 	if c.Random == nil {
 		c.Random = rand.Reader
 	}
-	return &SA{spi: c.SPI, enc: append([]byte{}, c.EncryptionKey...), auth: append([]byte{}, c.IntegrityKey...), alg: c.Integrity, rng: c.Random}, nil
+	return &SA{spi: c.SPI, enc: append([]byte{}, c.EncryptionKey...), auth: append([]byte{}, c.IntegrityKey...), alg: c.Integrity, suite: suite, rng: c.Random}, nil
 }
 func (s *SA) SPI() uint32 { return s.spi }
 
@@ -55,24 +61,26 @@ func (s *SA) Seal(payload []byte, next byte) ([]byte, error) {
 		return nil, ErrExhausted
 	}
 	s.seq++
-	padding := (16 - (len(payload)+2)%16) % 16
+	align := s.suite.Alignment()
+	padding := (align - (len(payload)+2)%align) % align
 	p := append([]byte{}, payload...)
 	for i := 1; i <= padding; i++ {
 		p = append(p, byte(i))
 	}
 	p = append(p, byte(padding), next)
-	ct, e := vc.EncryptCBC(s.enc, p, s.rng)
-	if e != nil {
-		return nil, e
+	iv := make([]byte, s.suite.IVSize())
+	if s.suite.AEAD() {
+		binary.BigEndian.PutUint64(iv, uint64(s.seq))
+	} else if _, err := io.ReadFull(s.rng, iv); err != nil {
+		return nil, err
 	}
-	b := binary.BigEndian.AppendUint32(nil, s.spi)
-	b = binary.BigEndian.AppendUint32(b, s.seq)
-	b = append(b, ct...)
-	m, e := s.alg.MAC(s.auth, b)
-	if e != nil {
-		return nil, e
+	prefix := binary.BigEndian.AppendUint32(nil, s.spi)
+	prefix = binary.BigEndian.AppendUint32(prefix, s.seq)
+	body, err := s.suite.Seal(p, s.enc, s.auth, iv, prefix)
+	if err != nil {
+		return nil, err
 	}
-	return append(b, m...), nil
+	return append(prefix, body...), nil
 }
 func (s *SA) acceptable(seq uint32) bool {
 	if seq == 0 {
@@ -87,7 +95,11 @@ func (s *SA) acceptable(seq uint32) bool {
 
 // Open updates the replay window only AFTER MAC, decryption, and padding validate.
 func (s *SA) Open(b []byte) ([]byte, byte, error) {
-	if len(b) < 8+32+s.alg.Size() || binary.BigEndian.Uint32(b) != s.spi {
+	minimum := s.suite.Alignment()
+	if s.suite.AEAD() {
+		minimum = 2
+	}
+	if len(b) < 8+s.suite.IVSize()+minimum+s.suite.TagSize() || binary.BigEndian.Uint32(b) != s.spi {
 		return nil, 0, errors.New("invalid ESP length or SPI")
 	}
 	seq := binary.BigEndian.Uint32(b[4:])
@@ -96,13 +108,9 @@ func (s *SA) Open(b []byte) ([]byte, byte, error) {
 	if !s.acceptable(seq) {
 		return nil, 0, ErrReplay
 	}
-	end := len(b) - s.alg.Size()
-	if !s.alg.Verify(s.auth, b[:end], b[end:]) {
-		return nil, 0, ErrIntegrity
-	}
-	p, e := vc.DecryptCBC(s.enc, b[8:end])
+	p, e := s.suite.Open(b[8:], s.enc, s.auth, b[:8])
 	if e != nil {
-		return nil, 0, e
+		return nil, 0, fmt.Errorf("%w: %v", ErrIntegrity, e)
 	}
 	if len(p) < 2 {
 		return nil, 0, errors.New("truncated ESP trailer")
