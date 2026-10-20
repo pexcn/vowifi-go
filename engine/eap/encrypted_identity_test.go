@@ -178,7 +178,7 @@ func TestEncryptedIdentityOfferDoesNotEnableFastReauthentication(t *testing.T) {
 		t.Fatal(err)
 	}
 	reauth, _ := (Packet{Code: Request, Identifier: 2, Type: AKA, Subtype: 13}).Marshal()
-	if _, _, err = c.Handle(context.Background(), reauth); err == nil || !strings.Contains(err.Error(), "unsupported AKA subtype 13") {
+	if reply, done, err := c.Handle(context.Background(), reauth); err == nil || !strings.Contains(err.Error(), "reauth context unavailable") || done || len(reply) != 0 || c.cached != nil || c.pending != nil {
 		t.Fatalf("fast reauthentication enabled: %v", err)
 	}
 }
