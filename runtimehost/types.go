@@ -6,6 +6,7 @@ import (
 	"encoding/hex"
 	"errors"
 	"fmt"
+	"github.com/iniwex5/vowifi-go/engine/eap"
 	"go.uber.org/zap"
 	"sync/atomic"
 
@@ -278,19 +279,20 @@ type Service interface {
 }
 
 type StartRequest struct {
-	Mode          string
-	DeviceID      string
-	TraceID       string
-	Profile       identity.Profile
-	Prepared      *identity.PreparedSession
-	NetworkMode   string
-	VoiceGateway  *voicehost.Gateway
-	SIM           SIMAdapter
-	Access        *ModemAccessAdapter
-	Dataplane     DataplanePolicy
-	Proxy         *ProxyConfig
-	DeliveryStore messaging.DeliveryStore
-	Dispatch      eventhost.Dispatcher
-	BeforeStart   func(context.Context, SessionConfig) error
-	ShouldRun     func() bool
+	AuthenticationContext *eap.ReauthContext `json:"-"`
+	Mode                  string
+	DeviceID              string
+	TraceID               string
+	Profile               identity.Profile
+	Prepared              *identity.PreparedSession
+	NetworkMode           string
+	VoiceGateway          *voicehost.Gateway
+	SIM                   SIMAdapter
+	Access                *ModemAccessAdapter
+	Dataplane             DataplanePolicy
+	Proxy                 *ProxyConfig
+	DeliveryStore         messaging.DeliveryStore
+	Dispatch              eventhost.Dispatcher
+	BeforeStart           func(context.Context, SessionConfig) error
+	ShouldRun             func() bool
 }

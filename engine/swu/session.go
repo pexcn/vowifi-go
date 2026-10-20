@@ -31,6 +31,9 @@ type Config struct {
 	// A missing initial certificate AUTH may then defer authentication until
 	// mutual EAP-AKA and the final MSK-based responder AUTH both succeed.
 	EAPOnlyAuthentication bool
+	AKAPrimeNetworkName   string
+	RequireAKAPrime       bool
+	EAPReauth             *eap.ReauthContext
 	// EPDGFailover tries alternate resolved peers/UDP 4500 only when the
 	// initial exchange receives no datagrams, before sending any SIM identity.
 	EPDGFailover                                      bool
@@ -131,6 +134,9 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 	}
 	if _, ok := c.SIM.(sim.AKAProvider); !ok {
 		return nil, errors.New("SWu requires SIM AKA provider")
+	}
+	if c.RequireAKAPrime && c.AKAPrimeNetworkName == "" {
+		return nil, errors.New("AKA-prime requires a pinned network name")
 	}
 	if c.AKAChallengeMode != "" && c.AKAChallengeMode != "minimal" && c.AKAChallengeMode != "omit" && c.AKAChallengeMode != "checkcode" {
 		return nil, errors.New("unsupported AKA challenge mode")
@@ -703,7 +709,8 @@ func (s *Session) authenticate() error {
 	if s.cfg.APN != "" {
 		ps = append(ps, ikev2.Payload{Type: ikev2.IDr, Data: append([]byte{2, 0, 0, 0}, []byte(s.cfg.APN)...)})
 	}
-	client := eap.Client{Identity: s.cfg.NAI, Provider: s.cfg.SIM.(sim.AKAProvider), Preference: s.cfg.Identity.AKAAppPreference, ChallengeMode: s.cfg.AKAChallengeMode}
+	client := eap.Client{Identity: s.cfg.NAI, Provider: s.cfg.SIM.(sim.AKAProvider), Preference: s.cfg.Identity.AKAAppPreference, ChallengeMode: s.cfg.AKAChallengeMode, PrimeNetworkName: s.cfg.AKAPrimeNetworkName, RequirePrime: s.cfg.RequireAKAPrime, Reauth: s.cfg.EAPReauth, Binding: s.cfg.NAI + "\x00" + s.cfg.ServerName + "\x00" + s.cfg.AKAPrimeNetworkName, Random: s.cfg.Random}
+	defer client.Close()
 	verified := false
 	eapOnly := false
 	eapDone := false
@@ -766,6 +773,12 @@ func (s *Session) authenticate() error {
 			}
 			if e = s.establishChild(response.Payloads); e != nil {
 				return e
+			}
+			if err := s.ctx.Err(); err != nil {
+				return err
+			}
+			if err := client.Commit(); err != nil {
+				return err
 			}
 			s.nextID = id + 1
 			return nil

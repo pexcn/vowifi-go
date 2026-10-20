@@ -1,15 +1,16 @@
-// Package eap implements EAP-AKA (RFC 4187). AKA-prime and fast reauthentication
-// are intentionally rejected until separately implemented and verified.
+// Package eap implements authenticated EAP-AKA and EAP-AKA-prime exchanges.
 package eap
 
 import (
 	"context"
 	"crypto/hmac"
 	"crypto/sha1"
+	"crypto/sha256"
 	"encoding/binary"
 	"errors"
 	"fmt"
 	"github.com/iniwex5/vowifi-go/engine/sim"
+	"io"
 	"math/bits"
 )
 
@@ -20,6 +21,7 @@ const (
 	Failure  byte = 4
 	Identity byte = 1
 	AKA      byte = 23
+	AKAPrime byte = 50
 )
 const (
 	Challenge              byte = 1
@@ -28,18 +30,25 @@ const (
 	AKAIdentity            byte = 5
 	Notification           byte = 12
 	ClientError            byte = 14
+	Reauthentication       byte = 13
 )
 const (
-	ATRAND         byte = 1
-	ATAUTN         byte = 2
-	ATRES          byte = 3
-	ATAUTS         byte = 4
-	ATMAC          byte = 11
-	ATIdentity     byte = 14
-	ATNotification byte = 12
-	ATIV           byte = 129
-	ATEncrData     byte = 130
-	ATCheckcode    byte = 134
+	ATRAND            byte = 1
+	ATAUTN            byte = 2
+	ATRES             byte = 3
+	ATAUTS            byte = 4
+	ATMAC             byte = 11
+	ATIdentity        byte = 14
+	ATNotification    byte = 12
+	ATIV              byte = 129
+	ATEncrData        byte = 130
+	ATCheckcode       byte = 134
+	ATKDFInput        byte = 23
+	ATKDF             byte = 24
+	ATCounter         byte = 19
+	ATCounterTooSmall byte = 20
+	ATNonceS          byte = 21
+	ATBidding         byte = 136
 )
 
 type Attribute struct {
@@ -69,7 +78,7 @@ func Parse(b []byte) (Packet, error) {
 		return p, errors.New("invalid EAP code")
 	}
 	p.Type = b[4]
-	if p.Type != AKA {
+	if p.Type != AKA && p.Type != AKAPrime {
 		p.Data = append([]byte{}, b[5:]...)
 		return p, nil
 	}
@@ -79,17 +88,20 @@ func Parse(b []byte) (Packet, error) {
 	p.Subtype = b[5]
 	a := b[8:]
 	for len(a) > 0 {
+		if len(p.Attributes) >= 256 {
+			return p, errors.New("too many AKA attributes")
+		}
 		if len(a) < 2 || a[1] == 0 || int(a[1])*4 > len(a) {
 			return p, errors.New("invalid EAP-AKA attribute")
 		}
 		n := int(a[1]) * 4
 		for _, v := range p.Attributes {
-			if v.Type == a[0] {
+			if v.Type == a[0] && !(p.Type == AKAPrime && a[0] == ATKDF) {
 				return p, fmt.Errorf("duplicate AKA attribute %d", a[0])
 			}
 		}
 		switch a[0] {
-		case ATRAND, ATAUTN, ATMAC:
+		case ATRAND, ATAUTN, ATMAC, ATNonceS:
 			if n != 20 {
 				return p, errors.New("wrong AKA fixed attribute length")
 			}
@@ -105,15 +117,28 @@ func Parse(b []byte) (Packet, error) {
 			if n != 16 {
 				return p, errors.New("invalid AUTS")
 			}
-		case ATNotification, 6, 10, 13, 17, 19, 20, 22, 135:
+		case 6:
+			if n < 4 {
+				return p, errors.New("invalid AKA padding")
+			}
+			for _, v := range a[2:n] {
+				if v != 0 {
+					return p, errors.New("nonzero AKA padding")
+				}
+			}
+		case ATNotification, 10, 13, 17, 19, 20, 22, 24, 135, 136:
 			if n != 4 {
 				return p, errors.New("invalid AKA flag attribute")
 			}
 		case ATCheckcode:
-			if n != 4 && n != 24 {
+			expected := 24
+			if p.Type == AKAPrime {
+				expected = 36
+			}
+			if n != 4 && n != expected {
 				return p, errors.New("invalid AT_CHECKCODE length")
 			}
-		case ATIdentity, ATIV, ATEncrData, 132, 133:
+		case ATIdentity, ATIV, ATEncrData, ATKDFInput, 132, 133:
 		default:
 			if a[0] < 128 {
 				return p, fmt.Errorf("unknown mandatory AKA attribute %d", a[0])
@@ -131,7 +156,7 @@ func (p Packet) Marshal() ([]byte, error) {
 		return b, nil
 	}
 	b = append(b, p.Type)
-	if p.Type == AKA {
+	if p.Type == AKA || p.Type == AKAPrime {
 		b = append(b, p.Subtype, 0, 0)
 		for _, a := range p.Attributes {
 			n := len(a.Value) + 2
@@ -164,15 +189,15 @@ func (p Packet) Get(t byte) ([]byte, bool) {
 
 // MAC is calculated over the original EAP bytes with AT_MAC cleared (RFC 4187 10.15).
 func MAC(key, packet, extra []byte) ([]byte, error) {
-	if len(key) != 16 {
-		return nil, errors.New("AKA K_aut must be 16 bytes")
-	}
 	p, e := Parse(packet)
 	if e != nil {
 		return nil, e
 	}
-	if p.Type != AKA {
-		return nil, errors.New("not AKA")
+	if p.Type != AKA && p.Type != AKAPrime {
+		return nil, errors.New("not an AKA method")
+	}
+	if p.Type == AKA && len(key) != 16 || p.Type == AKAPrime && len(key) != 32 {
+		return nil, errors.New("invalid AKA MAC key length")
 	}
 	copyPacket := append([]byte{}, packet...)
 	found := false
@@ -189,7 +214,11 @@ func MAC(key, packet, extra []byte) ([]byte, error) {
 	if !found {
 		return nil, errors.New("missing AT_MAC")
 	}
-	h := hmac.New(sha1.New, key)
+	factory := sha1.New
+	if p.Type == AKAPrime {
+		factory = sha256.New
+	}
+	h := hmac.New(factory, key)
 	h.Write(copyPacket)
 	h.Write(extra)
 	return h.Sum(nil)[:16], nil
@@ -212,12 +241,13 @@ func VerifyMAC(key, packet, extra []byte) error {
 	}
 	return nil
 }
-func Sign(key []byte, p Packet) ([]byte, error) {
+func Sign(key []byte, p Packet) ([]byte, error) { return SignExtra(key, p, nil) }
+func SignExtra(key []byte, p Packet, extra []byte) ([]byte, error) {
 	b, e := p.Marshal()
 	if e != nil {
 		return nil, e
 	}
-	m, e := MAC(key, b, nil)
+	m, e := MAC(key, b, extra)
 	if e != nil {
 		return nil, e
 	}
@@ -295,7 +325,10 @@ func sha1Compress(b [64]byte) []byte {
 	return out
 }
 
-type Keys struct{ KEncr, KAut, MSK, EMSK []byte }
+type Keys struct {
+	KEncr, KAut, MSK, EMSK []byte
+	MK, KRe                []byte
+}
 
 func DeriveKeys(identity string, ik, ck []byte) (Keys, error) {
 	if identity == "" || len(ik) != 16 || len(ck) != 16 {
@@ -309,13 +342,29 @@ func DeriveKeys(identity string, ik, ck []byte) (Keys, error) {
 	if e != nil {
 		return Keys{}, e
 	}
-	return Keys{b[:16], b[16:32], b[32:96], b[96:160]}, nil
+	return Keys{KEncr: b[:16], KAut: b[16:32], MSK: b[32:96], EMSK: b[96:160], MK: h.Sum(nil)}, nil
 }
 
 type Client struct {
-	Identity   string
-	Provider   sim.AKAProvider
-	Preference string
+	// PrimeNetworkName is a local pin, never learned from an untrusted request.
+	PrimeNetworkName              string
+	RequirePrime                  bool
+	Reauth                        *ReauthContext
+	Binding                       string
+	method                        byte
+	kdfOffer                      []uint16
+	kdfSelected                   bool
+	success                       bool
+	cacheInitialized, cacheLease  bool
+	cacheEpoch                    uint64
+	usedCache                     bool
+	usedIdentity                  string
+	Random                        io.Reader
+	cached, pending               *reauthState
+	reauthRequest, reauthResponse []byte
+	Identity                      string
+	Provider                      sim.AKAProvider
+	Preference                    string
 	// ChallengeMode controls only the optional response AT_CHECKCODE: minimal
 	// echoes a verified server offer, checkcode always includes it, omit never
 	// includes it. Every offered server checkcode is verified in all modes.
@@ -370,23 +419,37 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 		if c.protectedResult {
 			return nil, false, errors.New("protected AKA result was not acknowledged")
 		}
+		c.success = true
 		return nil, true, nil
 	}
 	if p.Code != Request {
 		return nil, false, errors.New("expected EAP request")
 	}
+	c.initializeCache()
 	if p.Type == Identity {
 		if c.challenged {
 			return nil, false, errors.New("identity request after AKA challenge")
 		}
-		returnPacket := Packet{Code: Response, Identifier: p.Identifier, Type: Identity, Data: []byte(c.Identity)}
+		identity := c.authenticationIdentity()
+		c.usedIdentity = identity
+		returnPacket := Packet{Code: Response, Identifier: p.Identifier, Type: Identity, Data: []byte(identity)}
 		r, e := returnPacket.Marshal()
 		return r, false, e
 	}
-	if p.Type != AKA {
-		return nil, false, errors.New("unsupported EAP method (only AKA 23)")
+	if p.Type != AKA && p.Type != AKAPrime {
+		return nil, false, errors.New("unsupported EAP method")
 	}
-	reply := Packet{Code: Response, Identifier: p.Identifier, Type: AKA, Subtype: p.Subtype}
+	if c.method != 0 && c.method != p.Type {
+		return nil, false, errors.New("AKA method changed during authentication")
+	}
+	if p.Type == AKAPrime && c.PrimeNetworkName == "" {
+		return nil, false, errors.New("AKA-prime network binding not configured")
+	}
+	if c.RequirePrime && p.Type != AKAPrime {
+		return nil, false, errors.New("AKA-prime is required")
+	}
+	c.method = p.Type
+	reply := Packet{Code: Response, Identifier: p.Identifier, Type: p.Type, Subtype: p.Subtype}
 	switch p.Subtype {
 	case AKAIdentity:
 		if c.challenged {
@@ -406,15 +469,30 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 				c.identityNeedsCheckcode = true
 			}
 		}
-		reply.Attributes = []Attribute{{ATIdentity, append(binary.BigEndian.AppendUint16(nil, uint16(len(c.Identity))), []byte(c.Identity)...)}}
+		identity := c.authenticationIdentity()
+		for _, a := range p.Attributes {
+			if a.Type == 10 || a.Type == 17 {
+				identity = c.Identity
+				c.cached = nil
+			}
+		}
+		c.usedIdentity = identity
+		reply.Attributes = []Attribute{{ATIdentity, append(binary.BigEndian.AppendUint16(nil, uint16(len(identity))), []byte(identity)...)}}
 		r, e := reply.Marshal()
 		if e == nil {
 			c.pendingIdentityRequest = append([]byte{}, b...)
 			c.pendingIdentityResponse = append([]byte{}, r...)
 		}
 		return r, false, e
+	case Reauthentication:
+		return c.handleReauthentication(p, b)
 	case Challenge:
 		c.commitIdentityPair()
+		if p.Type == AKAPrime {
+			if r, negotiating, err := c.negotiateKDF(p); err != nil || negotiating {
+				return r, false, err
+			}
+		}
 		if c.Provider == nil {
 			return nil, false, errors.New("missing AKA provider")
 		}
@@ -425,6 +503,9 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 		autn, ok2 := p.Get(ATAUTN)
 		if !ok || !ok2 || len(randv) != 18 || len(autn) != 18 || randv[0] != 0 || randv[1] != 0 || autn[0] != 0 || autn[1] != 0 {
 			return nil, false, errors.New("missing or invalid AKA RAND/AUTN")
+		}
+		if p.Type == AKAPrime && autn[8]&0x80 == 0 {
+			return nil, false, errors.New("AKA-prime AMF separation bit missing")
 		}
 		res, err := c.calculate(randv[2:], autn[2:])
 		if err != nil {
@@ -439,12 +520,22 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 		if len(res.RES) < 4 || len(res.RES) > 16 {
 			return nil, false, errors.New("invalid SIM RES")
 		}
-		keys, e := DeriveKeys(c.Identity, res.IK, res.CK)
+		identity := c.usedIdentity
+		if identity == "" {
+			identity = c.Identity
+		}
+		keys, e := DeriveKeys(identity, res.IK, res.CK)
+		if p.Type == AKAPrime {
+			keys, e = DerivePrimeKeys(identity, c.PrimeNetworkName, autn[2:], res.IK, res.CK)
+		}
 		if e != nil {
 			return nil, false, e
 		}
 		if e = VerifyMAC(keys.KAut, b, nil); e != nil {
 			return nil, false, e
+		}
+		if bid, ok := p.Get(ATBidding); ok && p.Type == AKA && len(bid) == 2 && bid[0]&0x80 != 0 && c.PrimeNetworkName != "" {
+			return nil, false, errors.New("authenticated AKA bidding-down detected")
 		}
 		checkcode, hasCheckcode := p.Get(ATCheckcode)
 		if c.identityNeedsCheckcode && !hasCheckcode {
@@ -469,6 +560,11 @@ func (c *Client) Handle(ctx context.Context, b []byte) (replyBytes []byte, done 
 		// path: authenticate the entire request above, but do not adopt a
 		// pseudonym or fast-reauth identity until their lifecycles are supported.
 		// The two reserved bytes in IV/encrypted data are ignored (10.12).
+		if c.Reauth != nil {
+			if err := c.captureReauth(p, keys); err != nil {
+				return nil, false, err
+			}
+		}
 		if _, ok = p.Get(135); ok {
 			c.protectedResult = true
 			reply.Attributes = append(reply.Attributes, Attribute{135, []byte{0, 0}})
@@ -513,6 +609,10 @@ func (c *Client) commitIdentityPair() {
 func (c *Client) checkcode() []byte {
 	if len(c.identityTranscript) == 0 {
 		return nil
+	}
+	if c.method == AKAPrime {
+		h := sha256.Sum256(c.identityTranscript)
+		return h[:]
 	}
 	h := sha1.Sum(c.identityTranscript)
 	return h[:]

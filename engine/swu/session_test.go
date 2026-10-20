@@ -358,11 +358,41 @@ func (p *mockPeer) handshake() error {
 	if e != nil {
 		return e
 	}
+	method := eap.AKA
+	autn := make([]byte, 16)
 	p.aka, e = eap.DeriveKeys(p.cfg.NAI, bytes.Repeat([]byte{9}, 16), bytes.Repeat([]byte{7}, 16))
+	if p.cfg.RequireAKAPrime {
+		method = eap.AKAPrime
+		autn[6] = 0x80
+		p.aka, e = eap.DerivePrimeKeys(p.cfg.NAI, p.cfg.AKAPrimeNetworkName, autn, bytes.Repeat([]byte{9}, 16), bytes.Repeat([]byte{7}, 16))
+	}
 	if e != nil {
 		return e
 	}
-	challenge, e := eap.Sign(p.aka.KAut, eap.Packet{Code: eap.Request, Identifier: 7, Type: eap.AKA, Subtype: eap.Challenge, Attributes: []eap.Attribute{{Type: eap.ATRAND, Value: make([]byte, 18)}, {Type: eap.ATAUTN, Value: make([]byte, 18)}, {Type: eap.ATMAC, Value: make([]byte, 18)}}})
+	challengePacket := eap.Packet{Code: eap.Request, Identifier: 7, Type: method, Subtype: eap.Challenge, Attributes: []eap.Attribute{{Type: eap.ATRAND, Value: make([]byte, 18)}, {Type: eap.ATAUTN, Value: append([]byte{0, 0}, autn...)}}}
+	if method == eap.AKAPrime {
+		challengePacket.Attributes = append(challengePacket.Attributes, eap.Attribute{Type: eap.ATKDF, Value: []byte{0, 1}}, eap.Attribute{Type: eap.ATKDFInput, Value: append(binary.BigEndian.AppendUint16(nil, uint16(len(p.cfg.AKAPrimeNetworkName))), []byte(p.cfg.AKAPrimeNetworkName)...)})
+	}
+	if p.cfg.EAPReauth != nil {
+		identity := "reauth@epdg.test"
+		idPacket := eap.Packet{Code: eap.Request, Type: method, Subtype: eap.Challenge, Attributes: []eap.Attribute{{Type: 133, Value: append(binary.BigEndian.AppendUint16(nil, uint16(len(identity))), []byte(identity)...)}}}
+		raw, err := idPacket.Marshal()
+		if err != nil {
+			return err
+		}
+		plain := raw[8:]
+		if pad := 16 - len(plain)%16; pad != 16 {
+			plain = append(plain, 6, byte(pad/4))
+			plain = append(plain, make([]byte, pad-2)...)
+		}
+		ct, err := vc.EncryptCBC(p.aka.KEncr, plain, rand.Reader)
+		if err != nil {
+			return err
+		}
+		challengePacket.Attributes = append(challengePacket.Attributes, eap.Attribute{Type: eap.ATIV, Value: append([]byte{0, 0}, ct[:16]...)}, eap.Attribute{Type: eap.ATEncrData, Value: append([]byte{0, 0}, ct[16:]...)})
+	}
+	challengePacket.Attributes = append(challengePacket.Attributes, eap.Attribute{Type: eap.ATMAC, Value: make([]byte, 18)})
+	challenge, e := eap.Sign(p.aka.KAut, challengePacket)
 	if e != nil {
 		return e
 	}

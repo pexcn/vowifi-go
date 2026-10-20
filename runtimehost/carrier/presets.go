@@ -16,6 +16,8 @@ var presetFiles embed.FS
 // binary. A nil option flag means that the preset did not specify that flag.
 // Runtime consumers must resolve their own documented defaults.
 type PresetParameters struct {
+	EAPAKAPrimeNetworkName        string   `json:"eap_aka_prime_network_name" yaml:"eap_aka_prime_network_name"`
+	EAPAKAPrimeRequired           bool     `json:"eap_aka_prime_required" yaml:"eap_aka_prime_required"`
 	EPDGPort                      int      `json:"epdg_port" yaml:"epdg_port"`
 	DNSServer                     string   `json:"dns_server" yaml:"dns_server"`
 	IKEIdentityMode               string   `json:"ike_identity_mode" yaml:"ike_identity_mode"`

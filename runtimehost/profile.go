@@ -46,6 +46,9 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 	// SWu peers may authenticate solely through mutual EAP-AKA (RFC 5998).
 	// If a peer sends certificate AUTH instead, the engine still verifies it.
 	cfg.EAPOnlyAuthentication = true
+	cfg.EAPReauth = req.AuthenticationContext
+	cfg.AKAPrimeNetworkName = params.EAPAKAPrimeNetworkName
+	cfg.RequireAKAPrime = params.EAPAKAPrimeRequired
 	cfg.EPDGFailover = true
 	cfg.MTU = userNetworkMTU + imsESPHeadroom
 	if cfg.APN == "" {
@@ -55,6 +58,9 @@ func buildSWUConfig(req StartRequest) (swu.Config, error) {
 	cfg.DNSServer = params.DNSServer
 	cfg.AKAChallengeMode = params.AKAChallengeMode
 	cfg.NATKeepalive = time.Duration(params.NATKeepaliveSeconds) * time.Second
+	if cfg.RequireAKAPrime && strings.HasPrefix(cfg.NAI, "0") {
+		cfg.NAI = "6" + cfg.NAI[1:]
+	}
 	ikes, esps := params.IKEProposals, params.ESPProposals
 	if len(ikes) == 0 {
 		ikes = []string{"aes128-sha256-modp2048"}
