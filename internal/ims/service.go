@@ -18,9 +18,16 @@ import (
 	"time"
 
 	"github.com/iniwex5/vowifi-go/engine/sim"
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
 )
 
 type Config struct {
+	SMSOwner         messaging.Subscription
+	ReliabilityStore messaging.ReliabilityStore
+	InboundStore     messaging.InboundStore
+	OnStoredSMS      func(sender, text string, at time.Time)
+	OnSMSStoreError  func(error)
+
 	PrivateIdentity, PublicIdentity, Realm, SMSC string
 	PCSCF                                        []string
 	Transport                                    string
@@ -287,6 +294,11 @@ func (s *Service) Start(ctx context.Context) error {
 	}
 	s.ctx, s.cancel = context.WithCancel(ctx)
 	s.mu.Unlock()
+	// Recovery failure leaves durable assemblies intact. It must not prevent
+	// IMS registration or unrelated SMS from being received.
+	if err := s.restoreInboundSMS(); err != nil && s.cfg.OnSMSStoreError != nil {
+		s.cfg.OnSMSStoreError(fmt.Errorf("restore inbound SMS: %w", err))
+	}
 	var last error
 	for index := range s.targets {
 		if index > 0 {

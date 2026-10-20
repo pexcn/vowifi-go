@@ -8,6 +8,7 @@ import (
 	"time"
 	"unicode/utf8"
 
+	"github.com/iniwex5/vowifi-go/runtimehost/messaging"
 	smscodec "github.com/warthog618/sms"
 	"github.com/warthog618/sms/encoding/tpdu"
 	"github.com/warthog618/sms/encoding/ucs2"
@@ -223,16 +224,34 @@ func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendR
 			}
 			s.smsMu.Unlock()
 		}
+		failBeforeSend := func(cause error) error {
+			release()
+			if s.cfg.ReliabilityStore != nil {
+				return errors.Join(cause, s.cfg.ReliabilityStore.RecordSMSSIPResult(res.MessageID, i+1, 0, "failed", time.Now()))
+			}
+			return cause
+		}
 		parts[i].MR = ref
+		if s.cfg.ReliabilityStore != nil {
+			tpMR, err := s.cfg.ReliabilityStore.ReserveSMSPart(s.cfg.SMSOwner, res.MessageID, i+1, callID, int(ref), time.Now())
+			if err != nil {
+				release()
+				return res, err
+			}
+			if tpMR < 0 || tpMR > 255 {
+				release()
+				return res, errors.New("invalid reserved TP reference")
+			}
+			parts[i].MR = byte(tpMR)
+			parts[i].FirstOctet |= tpdu.FoSRR
+		}
 		b, e := parts[i].MarshalBinary()
 		if e != nil {
-			release()
-			return res, e
+			return res, failBeforeSend(e)
 		}
 		body, e := rpData(ref, destination, b)
 		if e != nil {
-			release()
-			return res, e
+			return res, failBeforeSend(e)
 		}
 		m := s.request("MESSAGE", uri, callID)
 		m.Body = body
@@ -240,8 +259,7 @@ func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendR
 		m.set("accept-contact", "*;+g.3gpp.smsip;require;explicit")
 		m.set("request-disposition", "no-fork")
 		if e = s.authorize(m); e != nil {
-			release()
-			return res, e
+			return res, failBeforeSend(e)
 		}
 		part := SentPart{PartNo: i + 1, CallID: callID, RPMR: int(ref), State: "pending"}
 		if s.cfg.OnPart != nil {
@@ -252,7 +270,8 @@ func (s *Service) SendSMS(ctx context.Context, to, text, encoding string) (SendR
 		}
 		r, e := s.transact(ctx, m)
 		if e != nil {
-			part.State = "failed"
+			e = errors.Join(messaging.ErrSendOutcomeUnknown, e)
+			part.State = "unknown" // a lost SIP response does not prove rejection
 			res.Parts = append(res.Parts, part)
 			if s.cfg.OnPart != nil {
 				if storeErr := s.cfg.OnPart(res.MessageID, part); storeErr != nil {
@@ -295,44 +314,81 @@ func (s *Service) receiveSMS(m *message) {
 	}
 	switch rp.Kind {
 	case 3, 5:
-		_ = s.write(response(m, 200, "OK"))
+		// RP-ACK can carry an SMS-SUBMIT-REPORT, not a final status report.
+		// Final delivery evidence comes from a separately parsed STATUS-REPORT.
 		s.smsMu.Lock()
 		ref, ok := s.smsPending[rp.Reference]
-		// RP-MR is scoped to this IMS association. When present, In-Reply-To
-		// must also identify the original submission; a stale report must not
-		// consume a newly allocated reference.
 		if ok && m.get("in-reply-to") != "" && strings.TrimSpace(m.get("in-reply-to")) != ref.CallID {
 			ok = false
 		}
-		if ok {
-			delete(s.smsPending, rp.Reference)
-		}
 		s.smsMu.Unlock()
-		if !ok {
-			return
-		}
 		state := "acked"
 		if rp.Kind == 5 {
 			state = "failed"
 		}
-		if s.cfg.OnReport != nil {
+		if s.cfg.ReliabilityStore != nil {
+			callID := strings.TrimSpace(m.get("in-reply-to"))
+			if ok {
+				callID = ref.CallID
+			}
+			err := s.cfg.ReliabilityStore.RecordSMSRPReport(s.cfg.SMSOwner, callID, int(rp.Reference), state, rp.Cause, time.Now())
+			if err != nil && !errors.Is(err, messaging.ErrDeliveryNotFound) {
+				_ = s.write(response(m, 503, "Service Unavailable"))
+				return
+			}
+		} else if ok && s.cfg.OnReport != nil {
 			s.cfg.OnReport(Report{CallID: ref.CallID, InReplyTo: m.get("in-reply-to"), RPMR: int(rp.Reference), RPCause: rp.Cause, State: state, At: time.Now()})
 		}
+		if ok {
+			s.smsMu.Lock()
+			if current, exists := s.smsPending[rp.Reference]; exists && current.CallID == ref.CallID {
+				delete(s.smsPending, rp.Reference)
+			}
+			s.smsMu.Unlock()
+		}
+		_ = s.write(response(m, 200, "OK"))
 	case 1:
-		p, e := smscodec.Unmarshal(rp.UserData)
-		if e != nil || p.SmsType() != tpdu.SmsDeliver {
+		p, err := smscodec.Unmarshal(rp.UserData)
+		if err != nil {
 			_ = s.write(response(m, 400, "Bad Request"))
 			return
 		}
-		alpha, e := p.DCS.Alphabet()
-		if e != nil || alpha == tpdu.Alpha8Bit {
-			_ = s.write(response(m, 415, "Unsupported Media Type"))
-			return
-		}
-		if _, e = smscodec.Decode([]*tpdu.TPDU{p}); e != nil && p.IsSingleSegment() {
+		var notify func()
+		switch p.SmsType() {
+		case tpdu.SmsStatusReport:
+			if p.FirstOctet.SRQ() { // a report for SMS-COMMAND cannot match SMS-SUBMIT
+				break
+			}
+			if s.cfg.ReliabilityStore != nil {
+				err = s.cfg.ReliabilityStore.RecordSMSTPReport(s.cfg.SMSOwner, messaging.TPReport{Reference: int(p.MR), Recipient: p.RA.Number(), Status: int(p.ST), ServiceCentreTime: p.SCTS.Time, DischargeTime: p.DT.Time, At: time.Now()})
+				if errors.Is(err, messaging.ErrDeliveryNotFound) {
+					err = nil
+				}
+			}
+		case tpdu.SmsDeliver:
+			alpha, e := p.DCS.Alphabet()
+			if e != nil || alpha == tpdu.Alpha8Bit {
+				_ = s.write(response(m, 415, "Unsupported Media Type"))
+				return
+			}
+			if _, e = smscodec.Decode([]*tpdu.TPDU{p}); e != nil && p.IsSingleSegment() {
+				_ = s.write(response(m, 400, "Bad Request"))
+				return
+			}
+			if s.cfg.InboundStore != nil {
+				notify, err = s.persistInboundSMS(p, rp.UserData, rp.Origin)
+			} else {
+				notify = func() { s.deliverTPDU(p) }
+			}
+		default:
 			_ = s.write(response(m, 400, "Bad Request"))
 			return
 		}
+		if err != nil {
+			_ = s.write(response(m, 503, "Service Unavailable"))
+			return
+		}
+		// Persist before acknowledging; a crash after this point cannot lose history.
 		_ = s.write(response(m, 200, "OK"))
 		ack := s.request("MESSAGE", sipURI(m.get("from")), token())
 		ack.Body = []byte{2, rp.Reference}
@@ -345,8 +401,12 @@ func (s *Service) receiveSMS(m *message) {
 				ctx, cancel := context.WithTimeout(s.ctx, s.cfg.TransactionTimeout)
 				defer cancel()
 				_, _ = s.transact(ctx, ack)
-				s.deliverTPDU(p)
+				if notify != nil {
+					notify()
+				}
 			}()
+		} else if notify != nil {
+			notify()
 		}
 	default:
 		_ = s.write(response(m, 400, "Bad Request"))

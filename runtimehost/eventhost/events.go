@@ -12,6 +12,9 @@ type Dispatcher interface {
 }
 
 type SMSReceived struct {
+	IMSI      string
+	Persisted bool // host history was committed before network acknowledgement
+
 	DevID   string
 	Sender  string
 	Content string
@@ -19,6 +22,8 @@ type SMSReceived struct {
 }
 
 type SMSSent struct {
+	IMSI string
+
 	DevID      string
 	TargetURI  string
 	Content    string

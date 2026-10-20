@@ -9,6 +9,10 @@ import (
 
 var ErrDeliveryNotFound = errors.New("sms delivery not found")
 
+// ErrSendOutcomeUnknown means the submission may have reached the network.
+// Query its message ID before retrying; automatic replay can duplicate SMS.
+var ErrSendOutcomeUnknown = errors.New("SMS submission outcome unknown; query delivery status before retrying")
+
 type SendOptions struct {
 	Encoding string `json:"encoding"`
 }
@@ -36,35 +40,42 @@ type DeliveryPartMatch struct {
 }
 
 type DeliveryPartStatus struct {
-	PartNo      int        `json:"part_no"`
-	CallID      string     `json:"call_id"`
-	InReplyTo   string     `json:"in_reply_to"`
-	RPMR        int        `json:"rp_mr"`
-	State       string     `json:"state"`
-	SIPCode     int        `json:"sip_code"`
-	RPCause     int        `json:"rp_cause"`
-	RPCauseText string     `json:"rp_cause_text"`
-	ErrorText   string     `json:"error_text"`
-	SentAt      time.Time  `json:"sent_at"`
-	ReportAt    *time.Time `json:"report_at"`
-	CreatedAt   time.Time  `json:"created_at"`
-	UpdatedAt   time.Time  `json:"updated_at"`
+	TPMR              *int       `json:"tp_mr,omitempty"`
+	TPState           string     `json:"tp_state,omitempty"`
+	TPStatus          *int       `json:"tp_status,omitempty"`
+	ServiceCentreTime *time.Time `json:"service_centre_time,omitempty"`
+	DischargeTime     *time.Time `json:"discharge_time,omitempty"`
+	PartNo            int        `json:"part_no"`
+	CallID            string     `json:"call_id"`
+	InReplyTo         string     `json:"in_reply_to"`
+	RPMR              int        `json:"rp_mr"`
+	State             string     `json:"state"`
+	SIPCode           int        `json:"sip_code"`
+	RPCause           int        `json:"rp_cause"`
+	RPCauseText       string     `json:"rp_cause_text"`
+	ErrorText         string     `json:"error_text"`
+	SentAt            time.Time  `json:"sent_at"`
+	ReportAt          *time.Time `json:"report_at"`
+	CreatedAt         time.Time  `json:"created_at"`
+	UpdatedAt         time.Time  `json:"updated_at"`
 }
 
 type DeliveryStatus struct {
-	ICCID      string               `json:"iccid"`
-	MessageID  string               `json:"message_id"`
-	IMSI       string               `json:"imsi"`
-	DeviceID   string               `json:"device_id"`
-	Peer       string               `json:"peer"`
-	Content    string               `json:"content"`
-	PartsTotal int                  `json:"parts_total"`
-	Acks       int                  `json:"acks"`
-	State      string               `json:"state"`
-	LastError  string               `json:"last_error"`
-	CreatedAt  time.Time            `json:"created_at"`
-	UpdatedAt  time.Time            `json:"updated_at"`
-	Parts      []DeliveryPartStatus `json:"parts"`
+	DeliveryState string               `json:"delivery_state"`
+	Delivered     int                  `json:"delivered"`
+	ICCID         string               `json:"iccid"`
+	MessageID     string               `json:"message_id"`
+	IMSI          string               `json:"imsi"`
+	DeviceID      string               `json:"device_id"`
+	Peer          string               `json:"peer"`
+	Content       string               `json:"content"`
+	PartsTotal    int                  `json:"parts_total"`
+	Acks          int                  `json:"acks"`
+	State         string               `json:"state"`
+	LastError     string               `json:"last_error"`
+	CreatedAt     time.Time            `json:"created_at"`
+	UpdatedAt     time.Time            `json:"updated_at"`
+	Parts         []DeliveryPartStatus `json:"parts"`
 }
 
 type DeliveryStore interface {

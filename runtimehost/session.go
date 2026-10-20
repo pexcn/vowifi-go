@@ -133,7 +133,10 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 	}
 
 	imsCfg.OnSMS = func(sender, text string, at time.Time) {
-		inst.Dispatch(ctx, eventhost.SMSReceived{DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
+		inst.Dispatch(ctx, eventhost.SMSReceived{IMSI: req.Profile.IMSI, DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
+	}
+	imsCfg.OnStoredSMS = func(sender, text string, at time.Time) {
+		inst.Dispatch(ctx, eventhost.SMSReceived{IMSI: req.Profile.IMSI, Persisted: true, DevID: req.DeviceID, Sender: sender, Content: text, Time: at})
 	}
 	installDeliveryCallbacks(&imsCfg, req)
 	svc, err := ims.New(imsCfg)
@@ -153,7 +156,7 @@ func connectSession(ctx context.Context, req StartRequest, inst *Instance) error
 		return fmt.Errorf("IMS: %w", err)
 	}
 	inst.mu.Lock()
-	inst.service = &messagingService{service: svc, store: req.DeliveryStore, dispatch: inst, deviceID: req.DeviceID}
+	inst.service = &messagingService{service: svc, store: req.DeliveryStore, dispatch: inst, deviceID: req.DeviceID, imsi: req.Profile.IMSI}
 	inst.mu.Unlock()
 	if err = registerVoice(ctx, req, inst, svc, network, localIP); err != nil {
 		return err
@@ -267,6 +270,7 @@ type messagingService struct {
 	store    messaging.DeliveryStore
 	dispatch eventhost.Dispatcher
 	deviceID string
+	imsi     string
 }
 
 func (s *messagingService) SendSMSWithOptions(ctx context.Context, to, text string, options messaging.SendOptions) (messaging.SendOutcome, error) {
@@ -278,7 +282,9 @@ func (s *messagingService) SendSMSWithOptions(ctx context.Context, to, text stri
 		if s.store != nil && r.MessageID != "" {
 			if status, getErr := s.store.GetSMSDeliveryStatus(r.MessageID); getErr == nil && status != nil {
 				out.PartsTotal = status.PartsTotal
-				if status.State == "acked" {
+				if _, reliable := s.store.(messaging.ReliabilityStore); reliable {
+					out.State, out.DeliveryState = status.State, status.DeliveryState
+				} else if status.State == "acked" {
 					out.State = status.State
 					out.DeliveryState = status.State
 				} else if persistErr := s.store.UpdateSMSDeliveryState(r.MessageID, "failed", err.Error(), status.Acks, time.Now()); persistErr != nil {
@@ -293,11 +299,14 @@ func (s *messagingService) SendSMSWithOptions(ctx context.Context, to, text stri
 			out.PartsTotal = status.PartsTotal
 			out.State = status.State
 			out.DeliveryState = status.State
+			if status.DeliveryState != "" {
+				out.DeliveryState = status.DeliveryState
+			}
 		}
 	}
 	// RP-ACK and TP status reports retain their own state. SIP 202 alone is never delivered.
 	if s.dispatch != nil {
-		s.dispatch.Dispatch(ctx, eventhost.SMSSent{DevID: s.deviceID, TargetURI: to, Content: text, Time: time.Now()})
+		s.dispatch.Dispatch(ctx, eventhost.SMSSent{IMSI: s.imsi, DevID: s.deviceID, TargetURI: to, Content: text, TotalParts: r.PartsTotal, Time: time.Now()})
 	}
 	return out, nil
 }
@@ -331,11 +340,18 @@ func installDeliveryCallbacks(cfg *ims.Config, req StartRequest) {
 	if store == nil {
 		return
 	}
+	cfg.OnSMSStoreError = func(err error) { Logger().Warn("VoWiFi SMS recovery incomplete", zap.Error(err)) }
+	cfg.SMSOwner = messaging.Subscription{DeviceID: req.DeviceID, IMSI: req.Profile.IMSI}
+	cfg.ReliabilityStore, _ = store.(messaging.ReliabilityStore)
+	cfg.InboundStore, _ = store.(messaging.InboundStore)
 	var deliveryMu sync.Mutex
 	cfg.OnSend = func(id, to, text string, total int) error {
 		return store.CreateSMSDelivery(id, req.Profile.IMSI, req.DeviceID, to, text, total, time.Now())
 	}
 	cfg.OnPart = func(id string, part ims.SentPart) error {
+		if cfg.ReliabilityStore != nil {
+			return cfg.ReliabilityStore.RecordSMSSIPResult(id, part.PartNo, part.SIPCode, part.State, time.Now())
+		}
 		if part.State == "accepted" {
 			return nil
 		}
