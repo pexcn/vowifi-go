@@ -266,10 +266,11 @@ func Start(ctx context.Context, c Config) (*Session, error) {
 		}
 	}
 	watchDone := make(chan struct{})
+	handshakeConn := s.conn
 	go func() {
 		select {
 		case <-childCtx.Done():
-			s.conn.Close()
+			handshakeConn.Close()
 		case <-watchDone:
 		}
 	}()
