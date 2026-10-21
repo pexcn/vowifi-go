@@ -99,6 +99,10 @@ func answerProxyDNS(t *testing.T, c net.Conn) {
 }
 
 func answerProxyDNSCode(t *testing.T, c net.Conn, rcode uint16) {
+	answerProxyDNSResponse(t, c, rcode, false)
+}
+
+func answerProxyDNSResponse(t *testing.T, c net.Conn, rcode uint16, empty bool) {
 	t.Helper()
 	for {
 		var length [2]byte
@@ -129,7 +133,7 @@ func answerProxyDNSCode(t *testing.T, c net.Conn, rcode uint16) {
 		if kind == 28 {
 			addresses = []net.IP{net.ParseIP("2001:db8::10").To16()}
 		}
-		if rcode != 0 {
+		if rcode != 0 || empty {
 			addresses = nil
 		}
 		response := append([]byte(nil), query[:end+5]...)

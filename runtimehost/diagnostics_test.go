@@ -3,6 +3,7 @@ package runtimehost
 import (
 	"encoding/json"
 	"net"
+	"reflect"
 	"strings"
 	"testing"
 	"time"
@@ -29,15 +30,20 @@ func TestSWUDiagnosticsAreDebugOnlyAndKeepActualDNSSeparate(t *testing.T) {
 	if err != nil || cfg.OnDiagnostic == nil {
 		t.Fatalf("DEBUG did not enable diagnostics: %v", err)
 	}
+	queries := []swu.DNSQueryDiagnostic{{Type: "A", ResponseReceived: true, RCode: "NXDOMAIN", AnswerCount: 0}}
 	cfg.OnDiagnostic(swu.Diagnostic{
 		Stage: "epdg_dns", DeviceID: "device", TraceID: "trace", EPDG: "epdg.example",
 		ProxyID: "de", DNSMode: "proxy", DNSTarget: "8.8.8.8:53", Duration: 25 * time.Millisecond,
+		DNSQueries: queries, DNSQueriesTruncated: true,
 		Err: &net.DNSError{Err: "no such host", Name: "epdg.example", Server: "192.168.1.1:53", IsNotFound: true},
 	})
 	entry := logs.All()[0]
 	fields := entry.ContextMap()
 	if entry.Level != zap.DebugLevel || fields["device_id"] != "device" || fields["trace_id"] != "trace" || fields["proxy_id"] != "de" || fields["dns_target"] != "8.8.8.8:53" || fields["reported_dns"] != "192.168.1.1:53" || fields["dns_not_found"] != true || fields["outcome"] != "failure" {
 		t.Fatalf("misleading DNS diagnostic: %+v", fields)
+	}
+	if !reflect.DeepEqual(fields["dns_queries"], queries) || fields["dns_queries_truncated"] != true {
+		t.Fatalf("missing wire DNS diagnostics: %+v", fields)
 	}
 	cfg.OnDiagnostic(swu.Diagnostic{
 		Stage: "ike_handshake", DeviceID: "device", TraceID: "trace", Peer: "192.0.2.10:4500",
