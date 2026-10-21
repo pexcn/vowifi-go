@@ -36,6 +36,12 @@ func swuDiagnosticLogger() func(swu.Diagnostic) {
 		}
 		if d.Stage == "epdg_dns" {
 			fields = append(fields, zap.String("dns_mode", d.DNSMode), zap.String("dns_target", d.DNSTarget), zap.Strings("resolved_ips", d.ResolvedIPs))
+			if len(d.DNSQueries) != 0 {
+				fields = append(fields, zap.Any("dns_queries", d.DNSQueries))
+			}
+			if d.DNSQueriesTruncated {
+				fields = append(fields, zap.Bool("dns_queries_truncated", true))
+			}
 		}
 		if d.Stage == "ike_handshake" {
 			fields = append(fields, zap.Strings("assigned_ip_families", d.AssignedIPFamilies))
@@ -47,8 +53,8 @@ func swuDiagnosticLogger() func(swu.Diagnostic) {
 			fields = append(fields, zap.Error(d.Err))
 			var dnsErr *net.DNSError
 			if errors.As(d.Err, &dnsErr) {
-				// Go can report the system resolver here even when Dial routes the
-				// query through SOCKS5. This is not the actual dns_target above.
+				// Proxied lookups correct Server to the SOCKS5 CONNECT target;
+				// system lookups retain Go's resolver metadata.
 				fields = append(fields, zap.String("reported_dns", dnsErr.Server), zap.Bool("dns_not_found", dnsErr.IsNotFound), zap.Bool("dns_timeout", dnsErr.IsTimeout))
 			}
 		}

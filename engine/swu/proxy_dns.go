@@ -2,6 +2,8 @@ package swu
 
 import (
 	"context"
+	"errors"
+	"fmt"
 	"net"
 	"strings"
 
@@ -14,6 +16,10 @@ import (
 const defaultProxyDNS = "8.8.8.8:53"
 
 func resolveEPDGWithProxy(ctx context.Context, remote, dnsServer string, proxy *ProxyConfig) (string, []net.IP, error) {
+	return resolveEPDGWithProxyCapture(ctx, remote, dnsServer, proxy, nil)
+}
+
+func resolveEPDGWithProxyCapture(ctx context.Context, remote, dnsServer string, proxy *ProxyConfig, queries *dnsQueryCapture) (string, []net.IP, error) {
 	if proxy == nil || !proxy.Enabled {
 		return resolveEPDGUsingDNS(ctx, remote, dnsServer)
 	}
@@ -25,9 +31,22 @@ func resolveEPDGWithProxy(ctx context.Context, remote, dnsServer string, proxy *
 	resolver := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
 		// Returning a stream makes Go frame DNS over TCP even when it initially
 		// requested UDP. CONNECT carries the query through the same proxy exit.
-		return ipsec.DialSOCKS5TCP(ctx, addr, dnsServer, proxy.Username, proxy.Password)
+		conn, err := ipsec.DialSOCKS5TCP(ctx, addr, dnsServer, proxy.Username, proxy.Password)
+		if err == nil && queries != nil {
+			conn = queries.wrap(conn)
+		}
+		return conn, err
 	}}
-	return resolveEPDGWithResolver(ctx, remote, resolver)
+	peer, ips, err := resolveEPDGWithResolver(ctx, remote, resolver)
+	var dnsErr *net.DNSError
+	if errors.As(err, &dnsErr) {
+		// Resolver.Dial overrides the destination, but Go still puts the system
+		// resolver in DNSError.Server. Copy it to retain error flags and cause.
+		actual := *dnsErr
+		actual.Server = dnsServer
+		err = fmt.Errorf("resolve ePDG via SOCKS5 DNS: %w", &actual)
+	}
+	return peer, ips, err
 }
 
 func normalizeDNSServer(server string) string {

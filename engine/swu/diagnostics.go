@@ -15,6 +15,8 @@ import (
 type Diagnostic struct {
 	Stage, DeviceID, TraceID, EPDG, ProxyID string
 	DNSMode, DNSTarget                      string
+	DNSQueries                              []DNSQueryDiagnostic
+	DNSQueriesTruncated                     bool
 	ResolvedIPs                             []string
 	Peer, RequestedIPStack                  string
 	AssignedIPFamilies                      []string
@@ -38,10 +40,17 @@ func (c Config) diagnostic(stage string, started time.Time, err error) Diagnosti
 
 func (c Config) resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
 	started := time.Now()
-	peer, ips, err := resolveEPDGWithProxy(ctx, remote, c.DNSServer, c.Proxy)
+	var queries *dnsQueryCapture
+	if c.OnDiagnostic != nil && c.Proxy != nil && c.Proxy.Enabled {
+		queries = &dnsQueryCapture{}
+	}
+	peer, ips, err := resolveEPDGWithProxyCapture(ctx, remote, c.DNSServer, c.Proxy, queries)
 	if c.OnDiagnostic != nil {
 		d := c.diagnostic("epdg_dns", started, err)
 		d.Peer = peer
+		if queries != nil {
+			d.DNSQueries, d.DNSQueriesTruncated = queries.snapshot()
+		}
 		for _, ip := range ips {
 			d.ResolvedIPs = append(d.ResolvedIPs, ip.String())
 		}
