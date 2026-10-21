@@ -63,7 +63,7 @@ func TestProxyDNSDiagnosticsReportActualTargetAndSelectedPeer(t *testing.T) {
 func TestDNSFailureDiagnosticsSurviveStartupCleanup(t *testing.T) {
 	local := trapLocalDNS(t)
 	proxy := testproxy.Start(t, "", "", func(c net.Conn, target string) {
-		if target != defaultProxyDNS {
+		if target != defaultProxyDNS && target != backupProxyDNS {
 			t.Errorf("actual target = %q", target)
 		}
 		answerProxyDNSCode(t, c, 3)
@@ -78,11 +78,12 @@ func TestDNSFailureDiagnosticsSurviveStartupCleanup(t *testing.T) {
 	defer cancel()
 	s, err := Start(ctx, cfg)
 	var dnsErr *net.DNSError
-	if s != nil || !errors.As(err, &dnsErr) || !dnsErr.IsNotFound || len(events) != 1 {
+	if s != nil || !errors.As(err, &dnsErr) || !dnsErr.IsNotFound || len(events) != 2 {
 		t.Fatalf("DNS failure = %v, session = %v, diagnostics = %+v", err, s, events)
 	}
-	d := events[0]
-	if d.Stage != "epdg_dns" || d.DNSTarget != defaultProxyDNS || d.Err != err || d.Peer != "" || len(d.ResolvedIPs) != 0 {
+	d := events[1]
+	if events[0].DNSTarget != defaultProxyDNS || dnsErr.Server != backupProxyDNS ||
+		d.Stage != "epdg_dns" || d.DNSTarget != backupProxyDNS || d.Err != err || d.Peer != "" || len(d.ResolvedIPs) != 0 {
 		t.Fatalf("failed startup lost actual DNS target: %+v", d)
 	}
 	if local.Load() != 0 {

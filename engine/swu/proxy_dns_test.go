@@ -68,7 +68,10 @@ func TestProxyDNSFailureDoesNotFallBackToLocalResolver(t *testing.T) {
 func TestProxyDNSCancellationClosesPendingQueries(t *testing.T) {
 	local := trapLocalDNS(t)
 	entered := make(chan struct{}, 2)
-	proxy := testproxy.Start(t, "", "", func(c net.Conn, _ string) {
+	proxy := testproxy.Start(t, "", "", func(c net.Conn, target string) {
+		if target != defaultProxyDNS {
+			t.Errorf("cancelled primary attempted backup %q", target)
+		}
 		entered <- struct{}{}
 		io.Copy(io.Discard, c)
 	})
@@ -76,15 +79,16 @@ func TestProxyDNSCancellationClosesPendingQueries(t *testing.T) {
 	defer cancel()
 	done := make(chan error, 1)
 	go func() {
-		_, _, err := resolveEPDGWithProxy(ctx, "epdg.proxy.invalid.:500", "", &ProxyConfig{Enabled: true, Addr: proxy})
+		cfg := Config{Proxy: &ProxyConfig{Enabled: true, Addr: proxy}}
+		_, _, err := cfg.resolveEPDG(ctx, "epdg.proxy.invalid.:500")
 		done <- err
 	}()
 	<-entered
 	cancel()
 	select {
 	case err := <-done:
-		if err == nil {
-			t.Fatal("cancelled lookup succeeded")
+		if !errors.Is(err, context.Canceled) {
+			t.Fatalf("lost lookup cancellation: %v", err)
 		}
 	case <-time.After(time.Second):
 		t.Fatal("proxied DNS ignored cancellation")

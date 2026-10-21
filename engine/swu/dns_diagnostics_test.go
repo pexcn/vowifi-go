@@ -52,7 +52,7 @@ func TestProxyDNSQueryDiagnostics(t *testing.T) {
 				answerProxyDNSResponse(t, c, tc.code, tc.empty)
 			})
 			var d Diagnostic
-			cfg := Config{Proxy: &ProxyConfig{Enabled: true, Addr: proxy}, OnDiagnostic: func(got Diagnostic) { d = got }}
+			cfg := Config{DNSServer: defaultProxyDNS, Proxy: &ProxyConfig{Enabled: true, Addr: proxy}, OnDiagnostic: func(got Diagnostic) { d = got }}
 			timeout := time.Second
 			if tc.timeout {
 				timeout = 100 * time.Millisecond

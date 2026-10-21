@@ -8,9 +8,10 @@ import (
 	"time"
 )
 
-// Diagnostic describes one startup result. DNSMode is literal, system, custom,
-// or proxy. DNSTarget is the configured endpoint actually used for custom/proxy
-// queries; system resolution leaves it empty because its endpoint is unknown.
+// Diagnostic describes one startup stage result, with a result per DNS attempt.
+// DNSMode is literal, system, custom, or proxy. DNSTarget is the configured
+// endpoint actually used for custom/proxy queries; system resolution leaves it
+// empty because its endpoint is unknown.
 // Peer is the selected ePDG endpoint, which can change during initial failover.
 type Diagnostic struct {
 	Stage, DeviceID, TraceID, EPDG, ProxyID string
@@ -39,6 +40,34 @@ func (c Config) diagnostic(stage string, started time.Time, err error) Diagnosti
 }
 
 func (c Config) resolveEPDG(ctx context.Context, remote string) (string, []net.IP, error) {
+	host, _, splitErr := net.SplitHostPort(remote)
+	if c.Proxy == nil || !c.Proxy.Enabled || normalizeDNSServer(c.DNSServer) != "" ||
+		splitErr != nil || net.ParseIP(host) != nil {
+		return c.resolveEPDGAttempt(ctx, remote)
+	}
+	// Default proxy DNS gets one bounded budget. Reserve time for the backup
+	// even if the primary stalls; an explicit DNSServer is used alone.
+	ctx, cancel := context.WithTimeout(ctx, 10*time.Second)
+	defer cancel()
+	servers := [...]string{defaultProxyDNS, backupProxyDNS}
+	var peer string
+	var ips []net.IP
+	var err error
+	for i, server := range servers {
+		deadline, _ := ctx.Deadline()
+		attemptCtx, finish := context.WithTimeout(ctx, time.Until(deadline)/time.Duration(len(servers)-i))
+		attempt := c
+		attempt.DNSServer = server
+		peer, ips, err = attempt.resolveEPDGAttempt(attemptCtx, remote)
+		finish()
+		if err == nil || ctx.Err() != nil {
+			break
+		}
+	}
+	return peer, ips, err
+}
+
+func (c Config) resolveEPDGAttempt(ctx context.Context, remote string) (string, []net.IP, error) {
 	started := time.Now()
 	var queries *dnsQueryCapture
 	if c.OnDiagnostic != nil && c.Proxy != nil && c.Proxy.Enabled {

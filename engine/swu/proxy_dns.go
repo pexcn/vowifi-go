@@ -14,6 +14,7 @@ import (
 // proxy. Use an explicit routable resolver for proxied bootstrap DNS instead.
 // Config.DNSServer overrides this default; all queries remain inside SOCKS5.
 const defaultProxyDNS = "8.8.8.8:53"
+const backupProxyDNS = "8.8.4.4:53"
 
 func resolveEPDGWithProxy(ctx context.Context, remote, dnsServer string, proxy *ProxyConfig) (string, []net.IP, error) {
 	return resolveEPDGWithProxyCapture(ctx, remote, dnsServer, proxy, nil)
@@ -28,14 +29,22 @@ func resolveEPDGWithProxyCapture(ctx context.Context, remote, dnsServer string, 
 		addr = proxy.Address
 	}
 	dnsServer = proxyDNSServer(dnsServer)
-	resolver := &net.Resolver{PreferGo: true, Dial: func(ctx context.Context, _, _ string) (net.Conn, error) {
+	resolver := &net.Resolver{PreferGo: true, Dial: func(dialCtx context.Context, _, _ string) (net.Conn, error) {
 		// Returning a stream makes Go frame DNS over TCP even when it initially
 		// requested UDP. CONNECT carries the query through the same proxy exit.
-		conn, err := ipsec.DialSOCKS5TCP(ctx, addr, dnsServer, proxy.Username, proxy.Password)
-		if err == nil && queries != nil {
+		conn, err := ipsec.DialSOCKS5TCP(dialCtx, addr, dnsServer, proxy.Username, proxy.Password)
+		if err != nil {
+			return nil, err
+		}
+		// net.Resolver can return on cancellation before its reads finish.
+		// Do not leave expired streams waiting while the backup lookup runs.
+		stream := &proxyDNSConn{Conn: conn}
+		stream.stop = context.AfterFunc(ctx, func() { _ = stream.Conn.Close() })
+		conn = stream
+		if queries != nil {
 			conn = queries.wrap(conn)
 		}
-		return conn, err
+		return conn, nil
 	}}
 	peer, ips, err := resolveEPDGWithResolver(ctx, remote, resolver)
 	var dnsErr *net.DNSError
@@ -47,6 +56,16 @@ func resolveEPDGWithProxyCapture(ctx context.Context, remote, dnsServer string, 
 		err = fmt.Errorf("resolve ePDG via SOCKS5 DNS: %w", &actual)
 	}
 	return peer, ips, err
+}
+
+type proxyDNSConn struct {
+	net.Conn
+	stop func() bool
+}
+
+func (c *proxyDNSConn) Close() error {
+	c.stop()
+	return c.Conn.Close()
 }
 
 func normalizeDNSServer(server string) string {

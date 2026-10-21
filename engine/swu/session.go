@@ -27,8 +27,8 @@ import (
 var ErrRekeyRequired = errors.New("SWu SA cannot be renewed; reconnect required")
 
 type Config struct {
-	// OnDiagnostic receives startup DNS and IKE results without authentication
-	// payloads or key material. Nil disables diagnostic collection.
+	// OnDiagnostic receives each startup DNS attempt and IKE result without
+	// authentication payloads or key material. Nil disables diagnostic collection.
 	OnDiagnostic func(Diagnostic)
 	// EAPOnlyAuthentication offers RFC 5998 in the first IKE_AUTH request.
 	// A missing initial certificate AUTH may then defer authentication until
