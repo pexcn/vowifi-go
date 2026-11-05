@@ -1,24 +1,14 @@
 package ims
 
 import (
-	"bytes"
 	"context"
-	"encoding/xml"
 	"errors"
 	"fmt"
-	"io"
-	"net/url"
 	"strings"
 	"sync"
 	"time"
 )
 
-type ussdDocument struct {
-	XMLName   xml.Name `xml:"ussd-data"`
-	Language  string   `xml:"language,omitempty"`
-	Text      string   `xml:"ussd-string"`
-	ErrorCode string   `xml:"error-code,omitempty"`
-}
 type ussdDialog struct {
 	mu                  sync.Mutex
 	opMu                sync.Mutex
@@ -30,71 +20,24 @@ type ussdDialog struct {
 	Closed              bool
 }
 
-func encodeUSSD(text string) ([]byte, error) {
-	if len(text) > 4096 {
-		return nil, errors.New("USSD text too long")
-	}
-	return xml.Marshal(ussdDocument{XMLName: xml.Name{Space: "http://www.3gpp.org/ims/ussd/1.0", Local: "ussd-data"}, Language: "en", Text: text})
-}
-func decodeUSSD(b []byte) (string, error) {
-	if len(b) > 65536 {
-		return "", errors.New("USSD XML too large")
-	}
-	d := xml.NewDecoder(bytes.NewReader(b))
-	d.Strict = true
-	var doc ussdDocument
-	if e := d.Decode(&doc); e != nil {
-		return "", e
-	}
-	for {
-		tok, err := d.Token()
-		if err == io.EOF {
-			break
-		}
-		if err != nil {
-			return "", err
-		}
-		if data, ok := tok.(xml.CharData); !ok || strings.TrimSpace(string(data)) != "" {
-			return "", errors.New("trailing USSD XML content")
-		}
-	}
-	if doc.XMLName.Local != "ussd-data" || doc.XMLName.Space != "" && doc.XMLName.Space != "http://www.3gpp.org/ims/ussd/1.0" {
-		return "", errors.New("invalid USSD XML namespace")
-	}
-	if doc.ErrorCode != "" {
-		return "", fmt.Errorf("USSD remote error %s", doc.ErrorCode)
-	}
-	if len(doc.Text) > 4096 {
-		return "", errors.New("USSD response too long")
-	}
-	return doc.Text, nil
-}
-func isUSSD(m *message) bool {
-	return strings.EqualFold(strings.TrimSpace(strings.Split(m.get("content-type"), ";")[0]), "application/vnd.3gpp.ussd+xml")
-}
 func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error) {
 	if !s.Ready() {
 		return USSDResult{}, ErrNotReady
 	}
-	if code == "" || strings.ContainsAny(code, "\r\n\x00") {
+	code = strings.TrimSpace(code)
+	if code == "" || !cleanValue(code) {
 		return USSDResult{}, errors.New("invalid USSD request")
 	}
-	b, e := encodeUSSD(code)
+	id := token()
+	m, e := s.ussdInvite(code, id)
 	if e != nil {
 		return USSDResult{}, e
 	}
-	id := token()
-	uri := "sip:" + url.PathEscape(code) + "@" + s.cfg.Realm + ";user=dialstring"
-	m := s.request("INVITE", uri, id)
+	uri := strings.Fields(m.Start)[1]
 	flow, e := s.flowContext(m.generation)
 	if e != nil {
 		return USSDResult{}, e
 	}
-	m.set("content-type", "application/vnd.3gpp.ussd+xml")
-	m.set("accept", "application/vnd.3gpp.ussd+xml")
-	m.set("recv-info", "g.3gpp.ussd")
-	m.set("supported", "timer")
-	m.Body = b
 	if e = s.authorize(m); e != nil {
 		return USSDResult{}, e
 	}
@@ -111,61 +54,45 @@ func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error)
 	}
 	s.ussd[id] = dialog
 	s.ussdMu.Unlock()
+	keepDialog := false
+	defer func() {
+		if !keepDialog {
+			s.ussdMu.Lock()
+			delete(s.ussd, id)
+			s.ussdMu.Unlock()
+		}
+	}()
+
 	r, e := s.transact(ctx, m)
 	if e != nil {
-		s.ussdMu.Lock()
-		delete(s.ussd, id)
-		s.ussdMu.Unlock()
 		return USSDResult{}, e
 	}
-	ack := s.request("ACK", uri, id)
-	ack.generation = m.generation
-	ack.set("from", m.get("from"))
+	ack := s.ussdRequest(dialog, id, "ACK")
 	ack.set("to", r.get("to"))
 	ack.set("cseq", strings.Split(m.get("cseq"), " ")[0]+" ACK")
-	if r.status() >= 200 && r.status() < 300 {
-		if contact := sipURI(r.get("contact")); contact != "" {
-			ack.Start = "ACK " + contact + " SIP/2.0"
-			dialog.mu.Lock()
-			dialog.RemoteURI = contact
-			dialog.mu.Unlock()
-		}
-		if routes := r.Headers["record-route"]; len(routes) > 0 {
-			delete(ack.Headers, "route")
-			for i := len(routes) - 1; i >= 0; i-- {
-				ack.add("route", routes[i])
-				dialog.mu.Lock()
-				dialog.Routes = append(dialog.Routes, routes[i])
-				dialog.mu.Unlock()
-			}
-		}
-	} else {
+	if r.status() < 200 || r.status() >= 300 {
 		ack.set("via", m.get("via"))
 	}
 	if e := s.write(ack); e != nil {
 		return USSDResult{}, e
 	}
 	if r.status() < 200 || r.status() >= 300 {
-		s.ussdMu.Lock()
-		delete(s.ussd, id)
-		s.ussdMu.Unlock()
 		return USSDResult{}, fmt.Errorf("USSD INVITE rejected: %s", r.Start)
 	}
-	dialog.mu.Lock()
-	dialog.To = r.get("to")
-	dialog.mu.Unlock()
 	if len(r.Body) > 0 {
-		if !isUSSD(r) {
-			return USSDResult{}, errors.New("USSD peer returned unsupported content")
+		text, present, err := decodeUSSDContent(r)
+		if err != nil {
+			_ = s.CancelUSSD(context.Background(), id)
+			return USSDResult{}, err
 		}
-		text, e := decodeUSSD(r.Body)
-		if e != nil {
-			return USSDResult{}, e
+		if present {
+			keepDialog = true
+			return USSDResult{SessionID: id, Text: text}, nil
 		}
-		return USSDResult{SessionID: id, Text: text, Done: false}, nil
 	}
 	select {
 	case result := <-dialog.Results:
+		keepDialog = true
 		return result, nil
 	case <-ctx.Done():
 		_ = s.CancelUSSD(context.Background(), id)
@@ -174,6 +101,33 @@ func (s *Service) SendUSSD(ctx context.Context, code string) (USSDResult, error)
 		return USSDResult{}, s.ctx.Err()
 	case <-flow.Done():
 		return USSDResult{}, ErrFlowChanged
+	}
+}
+
+// Learn the confirmed dialog before dispatch delivers the 200 to its waiter.
+// A menu INFO can follow in the same TCP read, before SendUSSD runs again.
+func (s *Service) learnUSSDDialog(m *message) {
+	if m.status() < 200 || m.status() >= 300 || !strings.HasSuffix(m.get("cseq"), " INVITE") {
+		return
+	}
+	s.ussdMu.Lock()
+	d := s.ussd[m.get("call-id")]
+	s.ussdMu.Unlock()
+	if d == nil || transactionKey(m) != transactionKey(d.Invite) || m.generation != d.Invite.generation {
+		return
+	}
+	d.mu.Lock()
+	defer d.mu.Unlock()
+	if d.Closed {
+		return
+	}
+	d.To = m.get("to")
+	if contact := sipURI(m.get("contact")); contact != "" {
+		d.RemoteURI = contact
+	}
+	d.Routes = nil
+	for i := len(m.Headers["record-route"]) - 1; i >= 0; i-- {
+		d.Routes = append(d.Routes, m.Headers["record-route"][i])
 	}
 }
 
@@ -208,8 +162,10 @@ func (s *Service) ContinueUSSD(ctx context.Context, id, input string) (USSDResul
 		return USSDResult{}, errors.New("USSD dialog closed")
 	}
 	m := s.ussdRequest(d, id, "INFO")
-	m.set("content-type", "application/vnd.3gpp.ussd+xml")
+	m.set("content-type", ussdContentType)
 	m.set("info-package", "g.3gpp.ussd")
+	m.set("recv-info", "g.3gpp.ussd")
+	m.set("content-disposition", "render;handling=optional")
 	m.Body = body
 	if err := s.authorize(m); err != nil {
 		return USSDResult{}, err
@@ -222,11 +178,13 @@ func (s *Service) ContinueUSSD(ctx context.Context, id, input string) (USSDResul
 		return USSDResult{}, fmt.Errorf("USSD INFO rejected: %s", r.Start)
 	}
 	if len(r.Body) > 0 {
-		if !isUSSD(r) {
-			return USSDResult{}, errors.New("unsupported USSD response content")
+		text, present, err := decodeUSSDContent(r)
+		if err != nil {
+			return USSDResult{}, err
 		}
-		text, err := decodeUSSD(r.Body)
-		return USSDResult{SessionID: id, Text: text}, err
+		if present {
+			return USSDResult{SessionID: id, Text: text}, nil
+		}
 	}
 	select {
 	case result := <-d.Results:
@@ -245,6 +203,7 @@ func (s *Service) ussdRequest(d *ussdDialog, id, method string) *message {
 	routes := append([]string(nil), d.Routes...)
 	d.mu.Unlock()
 	m := s.request(method, uri, id)
+	s.ussdHeaders(m)
 	m.generation = d.Invite.generation
 	m.set("from", from)
 	m.set("to", to)
@@ -305,7 +264,7 @@ func (s *Service) receiveUSSD(m *message) {
 		return
 	}
 	if d == nil {
-		if m.method() == "INVITE" && isUSSD(m) {
+		if m.method() == "INVITE" {
 			_ = s.write(response(m, 488, "Not Acceptable Here"))
 			return
 		}
@@ -321,11 +280,11 @@ func (s *Service) receiveUSSD(m *message) {
 	}
 	switch m.method() {
 	case "INFO":
-		if !isUSSD(m) {
+		text, present, e := decodeUSSDContent(m)
+		if errors.Is(e, errUSSDContentType) || e == nil && !present {
 			_ = s.write(response(m, 415, "Unsupported Media Type"))
 			return
 		}
-		text, e := decodeUSSD(m.Body)
 		if e != nil {
 			_ = s.write(response(m, 400, "Bad Request"))
 			return
@@ -338,12 +297,13 @@ func (s *Service) receiveUSSD(m *message) {
 	case "BYE":
 		text := ""
 		if len(m.Body) > 0 {
-			if !isUSSD(m) {
+			var present bool
+			var e error
+			text, present, e = decodeUSSDContent(m)
+			if errors.Is(e, errUSSDContentType) || e == nil && !present {
 				_ = s.write(response(m, 415, "Unsupported Media Type"))
 				return
 			}
-			var e error
-			text, e = decodeUSSD(m.Body)
 			if e != nil {
 				_ = s.write(response(m, 400, "Bad Request"))
 				return

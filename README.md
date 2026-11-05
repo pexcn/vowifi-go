@@ -14,7 +14,7 @@
 | 数据面 | 双向 ESP、完整性、64 包 replay window、用户态 IPv4/IPv6、隧道内 TCP/UDP/DNS、SOCKS5 UDP | 不操作主机路由或 XFRM/TUN；IPv6 扩展头、分片、ESN/完整 PMTU 仍不支持 |
 | IMS | REGISTER、401/407 AKA Digest、AUTS、刷新、SIP transaction、P-CSCF 选择、`ipsec-3gpp` 四组 SA | SIP UDP/TCP；内层支持 AES-CBC/null + HMAC-SHA1-96/MD5-96；认证或安全协商失败不会报告 ready |
 | 短信 | GSM-7/UCS2、长短信分片/重组、RP-DATA/ACK/ERROR、SIP MESSAGE、持久化与报告关联 | SIP 2xx 仅表示接受；RP-ACK 表示 RP 提交确认，不等于收件人最终送达；完整 TP status-report 生命周期仍未实现 |
-| USSI | XML、INVITE/ACK、INFO 多轮会话、BYE 取消、dialog tag 检查 | 不支持所有 multipart/运营商 XML 变体 |
+| USSI | SDP + XML multipart INVITE、直接 XML / multipart 响应、INFO 多轮会话、BYE 结果与取消、dialog tag 检查 | 不支持网络主动发起 USSI 或 USSI 100rel；实网兼容性仍需验证 |
 | 语音 | 实际模拟呼出、18x/PRACK/200/ACK/BYE/CANCEL、迟到 2xx 清理、SDP、G.711 RTP/RTCP | 仅 PCMA/PCMU RTP/AVP；呼入通知后返回 480，尚无接听/完整双向客户端桥接、AMR、SRTP 或转码 |
 | E911 | AT&T TS43 JSON/gzip action、EAP-AKA challenge、websheet 引导、可注入 HTTP | 不支持 T-Mobile entitlement；获取 websheet 不证明地址已登记，更不代表具备紧急呼叫能力 |
 | 生命周期 | 宿主 API、独立就绪阶段、代次取消、逆序清理、失败清理保留重试、observer 顺序、voice agent 所有权 | 持续实网运行、真实 SIM 切换和资源压力仍需设备验收 |

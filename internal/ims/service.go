@@ -501,6 +501,7 @@ func (s *Service) dispatch(m *message) {
 		ch := s.pending[transactionKey(m)]
 		s.mu.Unlock()
 		if ch != nil {
+			s.learnUSSDDialog(m)
 			select {
 			case ch <- m:
 			default:

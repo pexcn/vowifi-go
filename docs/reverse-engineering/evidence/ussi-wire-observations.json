@@ -1,0 +1,578 @@
+{
+  "target": {
+    "download_url": "https://github.com/pexcn/docker-images/releases/download/vohive/vohive_v1.5.5-10u_linux_amd64",
+    "sha256": "2b080980c72fede3dbad1c9f8830bb51d0bc368b4acb576c4f2d27f9182eb59f",
+    "bytes": 57958562,
+    "target_executed": false
+  },
+  "kind": "local-static-derived-observations",
+  "note": "Function metadata and decoded bytes are local observations, not additional REA Evidence. All byte addresses refer to the identical ELF PT_LOAD image. No target execution.",
+  "functions": [
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.BuildInitialInvite",
+      "entry": 17386240,
+      "end": 17389024,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 26
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.BuildInfo",
+      "entry": 17389024,
+      "end": 17389344,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 105
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.buildDialogRequest",
+      "entry": 17389344,
+      "end": 17390464,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 123
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.dialogRequestURI",
+      "entry": 17390464,
+      "end": 17391136,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 153
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.taggedAddress",
+      "entry": 17391136,
+      "end": 17391392,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 179
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.dialstringURI",
+      "entry": 17391392,
+      "end": 17391936,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 194
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.splitLocalAddr",
+      "entry": 17391936,
+      "end": 17392192,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 207
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.normalizedTransport",
+      "entry": 17392192,
+      "end": 17392352,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 219
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.contactHeader",
+      "entry": 17392352,
+      "end": 17393568,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/dialog.go",
+      "line": 231
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).HandleInboundInfoNoResponse",
+      "entry": 17393568,
+      "end": 17394336,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/inbound.go",
+      "line": 12
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).HandleInboundByeNoResponse",
+      "entry": 17394336,
+      "end": 17395040,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/inbound.go",
+      "line": 40
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.ParseResult",
+      "entry": 17395040,
+      "end": 17395776,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/parse.go",
+      "line": 5
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.LooksLikeMenu",
+      "entry": 17395776,
+      "end": 17396032,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/payload.go",
+      "line": 10
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.ExtractFromMultipart",
+      "entry": 17396032,
+      "end": 17396576,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/payload.go",
+      "line": 28
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.BuildMultipartBody",
+      "entry": 17396576,
+      "end": 17398400,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/payload.go",
+      "line": 63
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.BuildSDP",
+      "entry": 17398400,
+      "end": 17404160,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/payload.go",
+      "line": 80
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Profile.ApplyInitialInvite",
+      "entry": 17404160,
+      "end": 17405760,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/profile.go",
+      "line": 47
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Profile.ContactHeaderParams",
+      "entry": 17405760,
+      "end": 17406944,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/profile.go",
+      "line": 84
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).Send",
+      "entry": 17406944,
+      "end": 17410784,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 39
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).Continue",
+      "entry": 17410784,
+      "end": 17412896,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 142
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).Cancel",
+      "entry": 17412896,
+      "end": 17414016,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 194
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).ActiveSessionID",
+      "entry": 17414016,
+      "end": 17414304,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 225
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).ActiveSessionID.deferwrap1",
+      "entry": 17414304,
+      "end": 17414368,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 227
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).activeSession",
+      "entry": 17414368,
+      "end": 17414656,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 235
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).activeSession.deferwrap1",
+      "entry": 17414656,
+      "end": 17414720,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 237
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).matchInboundSession",
+      "entry": 17414720,
+      "end": 17415360,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 245
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).matchInboundSession.deferwrap1",
+      "entry": 17415360,
+      "end": 17415424,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 251
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).sessionFor",
+      "entry": 17415424,
+      "end": 17416000,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 265
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).sessionFor.deferwrap1",
+      "entry": 17416000,
+      "end": 17416064,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 271
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.sessionDialog",
+      "entry": 17416064,
+      "end": 17416640,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 278
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.sessionDialog.deferwrap1",
+      "entry": 17416640,
+      "end": 17416704,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 283
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).setSession",
+      "entry": 17416704,
+      "end": 17416896,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 291
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).clearSession",
+      "entry": 17416896,
+      "end": 17417248,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 298
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).clearSession.deferwrap1",
+      "entry": 17417248,
+      "end": 17417312,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 300
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.learnSessionFromResponse",
+      "entry": 17417312,
+      "end": 17417920,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 311
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.learnSessionFromResponse.deferwrap1",
+      "entry": 17417920,
+      "end": 17417984,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 316
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.sendACK",
+      "entry": 17417984,
+      "end": 17418688,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 329
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.contextFromEndpoint",
+      "entry": 17418688,
+      "end": 17419616,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 345
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.domainFromAOR",
+      "entry": 17419616,
+      "end": 17419808,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 376
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.parseOrWaitResult",
+      "entry": 17419808,
+      "end": 17421312,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 385
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.responseCarriesUSSD",
+      "entry": 17421312,
+      "end": 17421504,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 425
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.parseInboundInfo",
+      "entry": 17421504,
+      "end": 17422240,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 439
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.logUSSISIPRaw",
+      "entry": 17422240,
+      "end": 17423200,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 472
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Service).logInboundMismatch",
+      "entry": 17423200,
+      "end": 17424096,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 493
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.ussiSIPRawLogMethodAndCallID",
+      "entry": 17424096,
+      "end": 17424480,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 513
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.requestHeader",
+      "entry": 17424480,
+      "end": 17424608,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/service.go",
+      "line": 537
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Session).IsActive",
+      "entry": 17424608,
+      "end": 17424832,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/session.go",
+      "line": 39
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Session).IsActive.deferwrap1",
+      "entry": 17424832,
+      "end": 17424896,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/session.go",
+      "line": 44
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.(*Session).Terminate",
+      "entry": 17424896,
+      "end": 17425024,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/session.go",
+      "line": 49
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.EncodeXML",
+      "entry": 17425024,
+      "end": 17425728,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/xml.go",
+      "line": 19
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.DecodeXML",
+      "entry": 17425728,
+      "end": 17426240,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/xml.go",
+      "line": 40
+    },
+    {
+      "name": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi.IsContentType",
+      "entry": 17426240,
+      "end": 17426400,
+      "source": "github.com/iniwex5/vowifi-go/internal/vowifi/ussi/xml.go",
+      "line": 52
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.XMLPayload",
+      "entry": 17426400,
+      "end": 17426688,
+      "source": "<autogenerated>",
+      "line": 1
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.InfoResult",
+      "entry": 17426688,
+      "end": 17426880,
+      "source": "<autogenerated>",
+      "line": 1
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Context",
+      "entry": 17426880,
+      "end": 17427776,
+      "source": "<autogenerated>",
+      "line": 1
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Result",
+      "entry": 17427776,
+      "end": 17428000,
+      "source": "<autogenerated>",
+      "line": 1
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Service",
+      "entry": 17428000,
+      "end": 17428192,
+      "source": "<autogenerated>",
+      "line": 1
+    },
+    {
+      "name": "type:.eq.github.com/iniwex5/vowifi-go/internal/vowifi/ussi.Session",
+      "entry": 17428192,
+      "end": 17428608,
+      "source": "<autogenerated>",
+      "line": 1
+    }
+  ],
+  "constants": [
+    {
+      "virtual_address": "0x2776338",
+      "bytes": 1,
+      "text": "#"
+    },
+    {
+      "virtual_address": "0x21a05cb",
+      "bytes": 3,
+      "text": "%23"
+    },
+    {
+      "virtual_address": "0x21a07d7",
+      "bytes": 4,
+      "text": "user"
+    },
+    {
+      "virtual_address": "0x21b2055",
+      "bytes": 10,
+      "text": "dialstring"
+    },
+    {
+      "virtual_address": "0x219fa9a",
+      "bytes": 3,
+      "text": "sip"
+    },
+    {
+      "virtual_address": "0x21bb63f",
+      "bytes": 15,
+      "text": ";phone-context="
+    },
+    {
+      "virtual_address": "0x21e671b",
+      "bytes": 31,
+      "text": "Content-Type: application/sdp\r\n"
+    },
+    {
+      "virtual_address": "0x21bfdcc",
+      "bytes": 17,
+      "text": "\r\n--vohive_ussd\r\n"
+    },
+    {
+      "address": "0x2226489",
+      "length": 60,
+      "text": "+g.3gpp.icsi-ref=\"urn%3Aurn-7%3A3gpp-service.ims.icsi.mmtel\""
+    },
+    {
+      "address": "0x21a2ac6",
+      "length": 5,
+      "text": "audio"
+    },
+    {
+      "address": "0x21a2acb",
+      "length": 5,
+      "text": "video"
+    },
+    {
+      "address": "0x21c7523",
+      "length": 20,
+      "text": "+g.3gpp.nw-init-ussi"
+    },
+    {
+      "address": "0x21bd790",
+      "length": 16,
+      "text": "+g.3gpp.mid-call"
+    },
+    {
+      "address": "0x21cc411",
+      "length": 22,
+      "text": "+g.3gpp.srvcc-alerting"
+    },
+    {
+      "address": "0x21e065c",
+      "length": 29,
+      "text": "application/vnd.3gpp.ussd+xml"
+    },
+    {
+      "address": "0x219f668",
+      "length": 2,
+      "text": "en"
+    },
+    {
+      "address": "0x21ff008",
+      "length": 39,
+      "text": "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n"
+    },
+    {
+      "virtual_address": "0x22152f0",
+      "bytes": 49,
+      "text": "m=audio 0 RTP/AVP 106 112 104 110 102 108 96 97\r\n"
+    },
+    {
+      "virtual_address": "0x21c7343",
+      "bytes": 20,
+      "text": "P-Preferred-Identity"
+    },
+    {
+      "virtual_address": "0x21a7337",
+      "bytes": 6,
+      "text": "Accept"
+    },
+    {
+      "virtual_address": "0x21b03bf",
+      "bytes": 9,
+      "text": "Recv-Info"
+    },
+    {
+      "virtual_address": "0x21b3bbf",
+      "bytes": 11,
+      "text": "g.3gpp.ussd"
+    },
+    {
+      "virtual_address": "0x21c49b2",
+      "bytes": 19,
+      "text": "P-Preferred-Service"
+    },
+    {
+      "virtual_address": "0x21b91dc",
+      "bytes": 14,
+      "text": "Accept-Contact"
+    },
+    {
+      "virtual_address": "0x21b7882",
+      "bytes": 13,
+      "text": "P-Early-Media"
+    }
+  ],
+  "xml_type_metadata": {
+    "type_virtual_address": "0x1fc20c0",
+    "fields": [
+      {
+        "name": "XMLName",
+        "tag": "xml:\"ussd-data\"",
+        "offset": 0,
+        "name_virtual_address": "0x1adc6b7",
+        "type_virtual_address": "0x1e85a20"
+      },
+      {
+        "name": "Xmlns",
+        "tag": "xml:\"xmlns,attr\"",
+        "offset": 32,
+        "name_virtual_address": "0x1ad67a0",
+        "type_virtual_address": "0x1c5e8e0"
+      },
+      {
+        "name": "Language",
+        "tag": "xml:\"language\"",
+        "offset": 48,
+        "name_virtual_address": "0x1adc6d0",
+        "type_virtual_address": "0x1c5e8e0"
+      },
+      {
+        "name": "USSDString",
+        "tag": "xml:\"ussd-string\"",
+        "offset": 64,
+        "name_virtual_address": "0x1afcea3",
+        "type_virtual_address": "0x1c5e8e0"
+      }
+    ]
+  }
+}
